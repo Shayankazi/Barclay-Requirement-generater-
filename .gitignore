@@ -1,0 +1,11 @@
+# Ignore Python environment
+venv/
+__pycache__/
+*.pyc
+
+# Ignore Node.js dependencies
+node_modules/
+package-lock.json
+
+# Ignore system files
+.DS_Store
