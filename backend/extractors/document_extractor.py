@@ -75,11 +75,14 @@ class DocumentExtractor:
             return "", False
 
     def process_pdf_page_direct(self, pdf_document, page_num):
-        """Process a single PDF page for text extraction"""
+        """Process a single PDF page for text extraction with improved table handling"""
         try:
             page = pdf_document[page_num]
             
-            # Get text with enhanced options
+            # First, check if the page contains tables
+            table_data = self.extract_tables_from_pdf_page(page)
+            
+            # Get regular text with enhanced options
             text = page.get_text("text", sort=True, flags=fitz.TEXT_PRESERVE_LIGATURES | fitz.TEXT_PRESERVE_WHITESPACE)
             
             # If text is too short, try alternative extraction methods
@@ -96,11 +99,66 @@ class DocumentExtractor:
             # Clean the text
             text = self.clean_pdf_text(text)
             
+            # Add formatted tables to the text
+            if table_data:
+                for table in table_data:
+                    formatted_table = self.format_table(table)
+                    text += "\n\n" + formatted_table
+            
             return text
             
         except Exception as e:
             logger.warning(f"Error processing PDF page {page_num}: {str(e)}")
             return ""
+
+    def extract_tables_from_pdf_page(self, page):
+        """Extract tables from a PDF page using layout analysis"""
+        try:
+            # Get blocks which might represent tables
+            blocks = page.get_text("dict")["blocks"]
+            tables = []
+            
+            # Look for potential table structures
+            for block in blocks:
+                # Check if block contains lines (potential table)
+                if "lines" in block:
+                    lines = block["lines"]
+                    
+                    # Skip blocks with too few lines
+                    if len(lines) < 2:
+                        continue
+                    
+                    # Check if lines have consistent spans (potential table rows)
+                    row_data = []
+                    for line in lines:
+                        if "spans" in line:
+                            # Extract text from spans
+                            cell_data = []
+                            for span in line["spans"]:
+                                if "text" in span and span["text"].strip():
+                                    cell_data.append(span["text"].strip())
+                            
+                            if cell_data:
+                                row_data.append(cell_data)
+                    
+                    # If we have multiple rows with data, consider it a table
+                    if len(row_data) >= 2:
+                        # Normalize the table (ensure all rows have same number of columns)
+                        max_cols = max(len(row) for row in row_data)
+                        if max_cols >= 2:  # Only consider as table if at least 2 columns
+                            normalized_rows = []
+                            for row in row_data:
+                                if len(row) >= max_cols * 0.5:  # Row must have at least half the columns to be valid
+                                    normalized_rows.append(row + [''] * (max_cols - len(row)))
+                            
+                            if normalized_rows:
+                                tables.append(normalized_rows)
+            
+            return tables
+            
+        except Exception as e:
+            logger.warning(f"Error extracting tables from PDF page: {str(e)}")
+            return []
 
     def clean_pdf_text(self, text):
         """Clean text extracted from PDF"""
@@ -117,6 +175,114 @@ class DocumentExtractor:
         text = ''.join(char for char in text if char.isprintable() or char == '\n')
         
         return text.strip()
+
+    def format_table(self, table_data):
+        """
+        Format a table into readable text.
+        
+        Args:
+            table_data: List of lists representing table rows and cells
+            
+        Returns:
+            Formatted text representation of the table
+        """
+        if not table_data or not table_data[0]:
+            return ""
+            
+        # Calculate column widths
+        col_count = max(len(row) for row in table_data)
+        col_widths = [0] * col_count
+        
+        # Standardize all rows to have the same number of columns
+        for i in range(len(table_data)):
+            # Extend rows that have fewer cells than the maximum
+            if len(table_data[i]) < col_count:
+                table_data[i].extend([''] * (col_count - len(table_data[i])))
+        
+        # Determine the maximum width needed for each column
+        for row in table_data:
+            for i, cell in enumerate(row):
+                col_widths[i] = max(col_widths[i], len(str(cell).strip()))
+        
+        # Format the table with proper spacing
+        result = []
+        
+        # Add a header separator after the first row
+        header_sep = "+"
+        for width in col_widths:
+            header_sep += "-" * (width + 2) + "+"
+        
+        # Format each row
+        for i, row in enumerate(table_data):
+            formatted_row = "| "
+            for j, cell in enumerate(row):
+                cell_text = str(cell).strip()
+                formatted_row += cell_text.ljust(col_widths[j]) + " | "
+            result.append(formatted_row)
+            
+            # Add separator after header
+            if i == 0:
+                result.append(header_sep)
+        
+        # Add a newline before and after the table
+        return "\n" + "\n".join(result) + "\n"
+
+    def extract_from_docx(self, file_bytes):
+        """Extract text from DOCX files with improved table handling"""
+        try:
+            # Check cache first
+            file_hash = self.compute_hash(file_bytes)
+            with self.cache_lock:
+                if file_hash in self.cache:
+                    logger.info("Using cached DOCX result")
+                    return self.cache[file_hash]
+            
+            # Save bytes to temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as tmp:
+                tmp.write(file_bytes)
+                tmp_path = tmp.name
+
+            # Open and extract text from document
+            doc = Document(tmp_path)
+            text_blocks = []
+            
+            # Extract text from paragraphs
+            for para in doc.paragraphs:
+                if para.text.strip():  # Only add non-empty paragraphs
+                    text_blocks.append(para.text)
+            
+            # Extract text from tables with improved formatting
+            for table in doc.tables:
+                table_data = []
+                for row in table.rows:
+                    row_data = []
+                    for cell in row.cells:
+                        # Get all text from the cell, including from paragraphs
+                        cell_text = cell.text.strip()
+                        if cell_text:
+                            row_data.append(cell_text)
+                        else:
+                            row_data.append("")  # Empty cell
+                    table_data.append(row_data)
+                
+                # Format the table and add to text blocks
+                if table_data:
+                    formatted_table = self.format_table(table_data)
+                    text_blocks.append(formatted_table)
+            
+            # Clean up temporary file
+            os.unlink(tmp_path)
+            
+            result = '\n\n'.join(text_blocks)
+            
+            # Cache the result
+            with self.cache_lock:
+                self.cache[file_hash] = result
+            
+            return result
+            
+        except Exception as e:
+            raise Exception(f"Error extracting text from DOCX: {str(e)}")
 
     def estimate_optimal_dpi(self, pdf_document):
         """Estimate optimal DPI based on document complexity"""
@@ -294,7 +460,7 @@ class DocumentExtractor:
             return image  # Return original if enhancement fails
 
     def post_process_pdf_text(self, text):
-        """Apply post-processing to improve extracted PDF text"""
+        """Apply post-processing to improve extracted PDF text with better table handling"""
         if not text:
             return ""
             
@@ -303,7 +469,26 @@ class DocumentExtractor:
         unique_lines = []
         prev_line = ""
         
+        # Flag to identify table sections
+        in_table = False
+        
         for line in lines:
+            # Check if we're entering or leaving a table section
+            if line.startswith('+') and ('-' in line):
+                in_table = True
+                unique_lines.append(line)
+                prev_line = line
+                continue
+            
+            # If we're in a table, preserve all lines including empty ones
+            if in_table:
+                if not line.strip() and not prev_line.strip():
+                    in_table = False  # End of table
+                else:
+                    unique_lines.append(line)
+                    prev_line = line
+                continue
+            
             # Skip empty lines
             if not line.strip():
                 if prev_line:  # Only add newline if we have content
@@ -323,63 +508,35 @@ class DocumentExtractor:
         
         # Fix common OCR issues
         text = re.sub(r'([a-z])- ([a-z])', r'\1\2', text)  # Fix hyphenated words
-        text = re.sub(r'\s+', ' ', text)  # Normalize whitespace
-        text = re.sub(r'\n{3,}', '\n\n', text)  # Normalize newlines
+        
+        # Don't normalize whitespace within table sections
+        processed_lines = []
+        in_table = False
+        
+        for line in text.split('\n'):
+            if line.startswith('+') and ('-' in line):
+                in_table = True
+                processed_lines.append(line)
+                continue
+                
+            if in_table:
+                if not line.strip():
+                    in_table = False
+                    processed_lines.append(line)
+                else:
+                    processed_lines.append(line)
+                continue
+                
+            # For non-table text, normalize whitespace
+            processed_line = re.sub(r'\s+', ' ', line)
+            processed_lines.append(processed_line)
+        
+        text = '\n'.join(processed_lines)
+        
+        # Normalize newlines (but not in tables)
+        text = re.sub(r'\n{3,}', '\n\n', text)
         
         return text.strip()
-
-    def extract_from_docx(self, file_bytes):
-        """Extract text from DOCX files"""
-        try:
-            # Check cache first
-            file_hash = self.compute_hash(file_bytes)
-            with self.cache_lock:
-                if file_hash in self.cache:
-                    logger.info("Using cached DOCX result")
-                    return self.cache[file_hash]
-            
-            # Save bytes to temporary file
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as tmp:
-                tmp.write(file_bytes)
-                tmp_path = tmp.name
-
-            # Open and extract text from document
-            doc = Document(tmp_path)
-            text = []
-            
-            # Extract text from paragraphs
-            for para in doc.paragraphs:
-                if para.text.strip():  # Only add non-empty paragraphs
-                    text.append(para.text)
-            
-            # Extract text from tables
-            for table in doc.tables:
-                for row in table.rows:
-                    row_text = []
-                    for cell in row.cells:
-                        if cell.text.strip():  # Only add non-empty cells
-                            row_text.append(cell.text)
-                    if row_text:  # Only add non-empty rows
-                        text.append(' | '.join(row_text))
-            
-            # Clean up temporary file
-            os.unlink(tmp_path)
-            
-            result = '\n'.join(text)
-            
-            # Cache the result
-            with self.cache_lock:
-                self.cache[file_hash] = result
-            
-            return result
-            
-        except Exception as e:
-            raise Exception(f"Error extracting text from DOCX: {str(e)}")
-
-    @lru_cache(maxsize=5)
-    def get_encoding_list(self):
-        """Return list of encodings to try, cached to avoid recreation"""
-        return ['utf-8', 'latin-1', 'ascii', 'utf-16', 'windows-1252']
 
     def extract_from_txt(self, file_bytes):
         """Extract text from TXT files"""
@@ -413,6 +570,10 @@ class DocumentExtractor:
             
         except Exception as e:
             raise Exception(f"Error extracting text from TXT: {str(e)}")
+
+    def get_encoding_list(self):
+        """Return list of encodings to try, cached to avoid recreation"""
+        return ['utf-8', 'latin-1', 'ascii', 'utf-16', 'windows-1252']
 
     def extract_text_from_document(self, file_bytes, file_extension):
         """Main method to extract text based on file type"""
