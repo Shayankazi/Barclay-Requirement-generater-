@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Response
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Response, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -7,12 +7,14 @@ import logging
 import shutil
 import os
 import time
+import hashlib
 from typing import Optional, Dict, Any
 import pytesseract
 from functools import lru_cache
 from pathlib import Path
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+import uvloop
 
 from extractors.image_extractor import ImageExtractor
 from extractors.document_extractor import DocumentExtractor
@@ -21,6 +23,9 @@ from extractors.video_extractor import VideoExtractor
 from extractors.excel_extractor import ExcelExtractor
 from extractors.email_extractor import EmailExtractor
 from extractors.web_extractor import WebExtractor
+
+# Use uvloop for improved async performance
+asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 # Configure logging with more detail
 logging.basicConfig(
@@ -61,7 +66,11 @@ UPLOAD_DIR = Path("temp_uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 # Thread pool for concurrent processing
-thread_pool = ThreadPoolExecutor(max_workers=4)
+thread_pool = ThreadPoolExecutor(max_workers=8)  # Increased from 4 to 8 for better concurrency
+
+# Result cache
+RESULT_CACHE_SIZE = 100
+result_cache = {}
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
@@ -69,9 +78,10 @@ async def rate_limit_middleware(request: Request, call_next):
     current_time = time.time()
     
     # Clean up old rate limit entries
-    if client_ip in rate_limit:
-        if current_time - rate_limit[client_ip]['start_time'] > RATE_LIMIT_DURATION:
-            del rate_limit[client_ip]
+    expired_ips = [ip for ip, data in rate_limit.items() 
+                  if current_time - data['start_time'] > RATE_LIMIT_DURATION]
+    for ip in expired_ips:
+        del rate_limit[ip]
     
     # Check rate limit
     if client_ip in rate_limit:
@@ -91,6 +101,7 @@ async def rate_limit_middleware(request: Request, call_next):
     return response
 
 # Check if tesseract is installed
+@lru_cache(maxsize=1)
 def check_tesseract() -> bool:
     try:
         pytesseract.get_tesseract_version()
@@ -115,12 +126,64 @@ excel_extractor = ExcelExtractor()
 email_extractor = EmailExtractor()
 web_extractor = WebExtractor()
 
+def compute_file_hash(content: bytes) -> str:
+    """Compute SHA-256 hash of file content for caching"""
+    return hashlib.sha256(content).hexdigest()
+
+async def process_file_content(content: bytes, file_extension: str, filename: str):
+    """Process file content based on file type"""
+    try:
+        # Check cache first
+        file_hash = compute_file_hash(content)
+        if file_hash in result_cache:
+            logger.info(f"Cache hit for file: {filename}")
+            return result_cache[file_hash]
+        
+        # Process based on file type
+        if file_extension in ['.png', '.jpg', '.jpeg']:
+            if not check_tesseract():
+                raise HTTPException(status_code=500, detail="OCR dependencies not configured")
+            text = await run_in_threadpool(image_extractor.extract_text_from_image, content)
+        
+        elif file_extension in ['.pdf', '.docx', '.txt']:
+            text = await run_in_threadpool(document_extractor.extract_text_from_document, content, file_extension)
+        
+        elif file_extension in ['.xlsx', '.xls']:
+            text = await run_in_threadpool(excel_extractor.extract_text_from_excel, content, file_extension)
+        
+        elif file_extension == '.eml':
+            text = await run_in_threadpool(email_extractor.extract_text_from_email, content)
+        
+        elif file_extension == '.html':
+            text = await run_in_threadpool(web_extractor.extract_text_from_html, content.decode())
+        
+        elif file_extension in ['.mp3', '.wav']:
+            text = await run_in_threadpool(audio_extractor.extract_text_from_audio, content, file_extension)
+        
+        elif file_extension in ['.mp4', '.avi', '.mov']:
+            text = await run_in_threadpool(video_extractor.extract_text_from_video, content, file_extension)
+        
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {file_extension}")
+
+        # Cache result (maintain cache size)
+        if len(result_cache) >= RESULT_CACHE_SIZE:
+            # Remove oldest entry
+            oldest_key = next(iter(result_cache))
+            del result_cache[oldest_key]
+        result_cache[file_hash] = text
+        
+        return text
+    except Exception as e:
+        logger.error(f"Error processing file: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/extract-text")
-async def extract_text(file: UploadFile = File(...)):
+async def extract_text(file: UploadFile = File(...), background_tasks: BackgroundTasks = None):
     try:
         # Validate file size
         file_size = 0
-        chunk_size = 8192  # 8KB chunks
+        chunk_size = 32768  # Increased from 8KB to 32KB for faster reading
         content = bytearray()
 
         # Reset file position to start
@@ -144,46 +207,24 @@ async def extract_text(file: UploadFile = File(...)):
         # Get file extension
         file_extension = '.' + file.filename.lower().split('.')[-1]
         
-        try:
-            # Process based on file type
-            if file_extension in ['.png', '.jpg', '.jpeg']:
-                if not check_tesseract():
-                    raise HTTPException(status_code=500, detail="OCR dependencies not configured")
-                text = image_extractor.extract_text_from_image(content)
-            
-            elif file_extension in ['.pdf', '.docx', '.txt']:
-                text = document_extractor.extract_text_from_document(content, file_extension)
-            
-            elif file_extension in ['.xlsx', '.xls']:
-                text = excel_extractor.extract_text_from_excel(content, file_extension)
-            
-            elif file_extension == '.eml':
-                text = email_extractor.extract_text_from_email(content)
-            
-            elif file_extension == '.html':
-                text = web_extractor.extract_text_from_html(content.decode())
-            
-            elif file_extension in ['.mp3', '.wav']:
-                text = audio_extractor.extract_text_from_audio(content, file_extension)
-            
-            elif file_extension in ['.mp4', '.avi', '.mov']:
-                text = video_extractor.extract_text_from_video(content, file_extension)
-            
-            else:
-                raise HTTPException(status_code=400, detail=f"Unsupported file type: {file_extension}")
+        # Process file content
+        text = await process_file_content(bytes(content), file_extension, file.filename)
 
-            if not text.strip():
-                return JSONResponse(
-                    status_code=200,
-                    content={"extracted_text": "No text was extracted from the file. The file might be empty or contain no readable text."}
-                )
-            
-            return {"extracted_text": text}
+        if not text.strip():
+            return JSONResponse(
+                status_code=200,
+                content={"extracted_text": "No text was extracted from the file. The file might be empty or contain no readable text."}
+            )
+        
+        # Clean up memory
+        del content
+        
+        # Schedule cleanup of any temporary files
+        if background_tasks:
+            background_tasks.add_task(lambda: None)  # Placeholder for any cleanup tasks
+        
+        return {"extracted_text": text}
 
-        except Exception as e:
-            logger.error(f"Error processing file: {str(e)}")
-            raise HTTPException(status_code=500, detail=str(e))
-    
     except HTTPException:
         raise
     except Exception as e:

@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useCallback, useMemo, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import styled from '@emotion/styled';
 import './App.css';
 
+// Styled components (no changes needed here)
 const AppContainer = styled.div`
   flex: 1;
   display: flex;
@@ -199,32 +200,30 @@ const ResultContainer = styled(motion.div)`
   background: rgba(255, 255, 255, 0.8);
   border-radius: 16px;
   padding: 2rem;
-  margin-top: 1rem;
   max-height: 400px;
   overflow-y: auto;
-  font-family: 'Courier New', monospace;
   position: relative;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
-
+  
   h3 {
     font-size: 1.2rem;
-    color: #2d3748;
     margin-bottom: 1rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    color: #2d3748;
+    font-weight: 600;
   }
-
+  
   pre {
-    text-align: left;
     white-space: pre-wrap;
     word-wrap: break-word;
+    font-family: 'Inter', system-ui, sans-serif;
     line-height: 1.6;
+    font-size: 0.95rem;
     color: #4a5568;
-    background: rgba(255, 255, 255, 0.5);
-    padding: 1rem;
-    border-radius: 8px;
-    border: 1px solid rgba(79, 172, 254, 0.2);
+    margin: 0;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 1.25rem;
+    max-height: 300px;
   }
 `;
 
@@ -247,6 +246,18 @@ const ErrorMessage = styled(motion.div)`
   }
 `;
 
+// Loading spinner component
+const Spinner = styled(motion.div)`
+  border: 3px solid rgba(79, 172, 254, 0.2);
+  border-top: 3px solid #4facfe;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  margin-right: 10px;
+  display: inline-block;
+`;
+
+// Memoized file type message function
 const getFileTypeMessage = (filename) => {
   const ext = filename.toLowerCase().split('.').pop();
   const types = {
@@ -282,81 +293,19 @@ const getFileTypeMessage = (filename) => {
   return types[ext] || 'Processing file...';
 };
 
-function App() {
-  const [file, setFile] = useState(null);
-  const [extractedText, setExtractedText] = useState('');
-  const [loading, setLoading] = useState(false);
+// API service with retry logic
+const API_URL = 'http://localhost:8000';
 
-  const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    setFile(selectedFile);
-    setExtractedText('');
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    const droppedFile = e.dataTransfer.files[0];
-    setFile(droppedFile);
-    setExtractedText('');
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-  };
-
-  const [error, setError] = useState('');
-
-  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-  const ALLOWED_EXTENSIONS = [
-    // Document formats
-    '.xlsx', '.xls', '.csv', '.pdf', '.doc', '.docx', '.txt', '.eml', '.html', '.htm',
-    // Audio formats
-    '.mp3', '.wav', '.m4a', '.ogg',
-    // Video formats
-    '.mp4', '.avi', '.mov', '.mkv',
-    // Image formats
-    '.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.gif', '.webp'
-  ];
-  
-  const validateFile = (file) => {
-    if (!file) return 'Please select a file';
-    if (file.size > MAX_FILE_SIZE) return 'File size exceeds 50MB limit';
-    
-    const extension = '.' + file.name.split('.').pop().toLowerCase();
-    if (!ALLOWED_EXTENSIONS.includes(extension)) {
-      return `Unsupported file type. Allowed types: ${ALLOWED_EXTENSIONS.join(', ')}`;
-    }
-    return null;
-  };
-
-  const handleUpload = async () => {
-    if (!file) {
-      setError('Please select a file');
-      return;
-    }
-
-    const validationError = validateFile(file);
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-    setExtractedText('');
-
-    const formData = new FormData();
-    formData.append('file', file);
-
+const apiService = {
+  extractText: async (formData, onProgress) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       controller.abort();
-      setError('Request timed out. Please try again.');
-      setLoading(false);
-    }, 30000); // 30s timeout
-
+      throw new Error('Request timed out. Please try again.');
+    }, 60000); // 60s timeout
+    
     try {
-      const response = await fetch('http://localhost:8000/extract-text', {
+      const response = await fetch(`${API_URL}/extract-text`, {
         method: 'POST',
         body: formData,
         signal: controller.signal,
@@ -364,43 +313,147 @@ function App() {
           'Accept': 'application/json',
         }
       });
-
+      
       clearTimeout(timeoutId);
-
+      
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({
           detail: `Server error: ${response.status} ${response.statusText}`
         }));
         throw new Error(errorData.detail || 'Failed to extract text');
       }
-
+      
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         throw new Error('Invalid response format from server');
       }
-
-      const text = await response.text();
-      if (!text) {
-        throw new Error('Empty response from server');
+      
+      const data = await response.json();
+      if (!data.extracted_text) {
+        throw new Error('No text content in response');
       }
+      
+      return data.extracted_text;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  },
+  
+  // Retry logic
+  retry: async (fn, retries = 2, delay = 1000) => {
+    try {
+      return await fn();
+    } catch (error) {
+      if (retries <= 0) throw error;
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return apiService.retry(fn, retries - 1, delay * 1.5);
+    }
+  }
+};
 
-      try {
-        const data = JSON.parse(text);
-        if (!data.extracted_text) {
-          throw new Error('No text content in response');
-        }
-        setExtractedText(data.extracted_text);
-      } catch (parseError) {
-        throw new Error('Invalid JSON response from server');
-      }
+// File validation
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const ALLOWED_EXTENSIONS = [
+  // Document formats
+  '.xlsx', '.xls', '.csv', '.pdf', '.doc', '.docx', '.txt', '.eml', '.html', '.htm',
+  // Audio formats
+  '.mp3', '.wav', '.m4a', '.ogg',
+  // Video formats
+  '.mp4', '.avi', '.mov', '.mkv',
+  // Image formats
+  '.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.gif', '.webp'
+];
+
+const validateFile = (file) => {
+  if (!file) return 'Please select a file';
+  if (file.size > MAX_FILE_SIZE) return 'File size exceeds 50MB limit';
+  
+  const extension = '.' + file.name.split('.').pop().toLowerCase();
+  if (!ALLOWED_EXTENSIONS.includes(extension)) {
+    return `Unsupported file type. Allowed types: ${ALLOWED_EXTENSIONS.join(', ')}`;
+  }
+  return null;
+};
+
+// Main App component
+function App() {
+  const [file, setFile] = useState(null);
+  const [extractedText, setExtractedText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [progress, setProgress] = useState(0);
+
+  // Memoized file validation
+  const fileValidationError = useMemo(() => {
+    return file ? validateFile(file) : null;
+  }, [file]);
+
+  // Optimized event handlers with useCallback
+  const handleFileChange = useCallback((e) => {
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+      setExtractedText('');
+      setError('');
+    }
+  }, []);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile) {
+      setFile(droppedFile);
+      setExtractedText('');
+      setError('');
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+  }, []);
+
+  const handleUpload = useCallback(async () => {
+    if (!file) {
+      setError('Please select a file');
+      return;
+    }
+
+    if (fileValidationError) {
+      setError(fileValidationError);
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setExtractedText('');
+    setProgress(0);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      // Use the API service with retry logic
+      const text = await apiService.retry(() => 
+        apiService.extractText(formData, (progress) => {
+          setProgress(progress);
+        })
+      );
+      
+      setExtractedText(text);
     } catch (error) {
       console.error('Error:', error);
       setError(error.message || 'Error extracting text. Please try again.');
       setExtractedText('');
     } finally {
       setLoading(false);
+      setProgress(0);
     }
-  };
+  }, [file, fileValidationError]);
+
+  // Memoized file type message
+  const fileTypeMessage = useMemo(() => {
+    return file ? getFileTypeMessage(file.name) : '';
+  }, [file]);
 
   return (
     <AppContainer>
@@ -444,7 +497,7 @@ function App() {
           {file ? (
             <>
               <p className="file-info">Selected: {file.name}</p>
-              <p className="file-type">{getFileTypeMessage(file.name)}</p>
+              <p className="file-type">{fileTypeMessage}</p>
             </>
           ) : (
             <>
@@ -469,7 +522,12 @@ function App() {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
         >
-          {loading ? 'Processing...' : 'Extract Text'}
+          {loading ? (
+            <>
+              <Spinner animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} />
+              Processing...
+            </>
+          ) : 'Extract Text'}
         </Button>
 
         <AnimatePresence>

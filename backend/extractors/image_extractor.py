@@ -5,19 +5,37 @@ import pytesseract
 from PIL import Image, ImageEnhance, ImageFilter
 import io
 import re
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional, Union
 from collections import Counter
 import logging
+import functools
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
 
+# Thread-local storage for EasyOCR reader to avoid conflicts
+thread_local = threading.local()
+
 class ImageExtractor:
     def __init__(self):
-        # Initialize EasyOCR with GPU and use it as primary OCR
-        self.reader = easyocr.Reader(['en'], gpu=True, download_enabled=False)
+        # Initialize with lazy loading for EasyOCR
+        self._reader = None
+        self._reader_lock = threading.Lock()
         self.initialize_tesseract()
         self.min_confidence = 0.6
         self.cache = {}  # Cache for preprocessed images
+        self.cache_lock = threading.Lock()
+        self.max_cache_size = 50  # Limit cache size
+        self.thread_pool = ThreadPoolExecutor(max_workers=4)  # Thread pool for parallel processing
+
+    @property
+    def reader(self):
+        """Lazy initialization of EasyOCR reader to save memory until needed"""
+        if getattr(thread_local, 'reader', None) is None:
+            with self._reader_lock:
+                thread_local.reader = easyocr.Reader(['en'], gpu=True, download_enabled=False)
+        return thread_local.reader
 
     def initialize_tesseract(self):
         """Configure Tesseract parameters for better accuracy"""
@@ -30,45 +48,24 @@ class ImageExtractor:
 
     def preprocess_image(self, image) -> List[np.ndarray]:
         """Optimized image preprocessing focusing on most effective techniques"""
-        processed_images = []
-        
         # Convert to grayscale if needed
         if len(image.shape) == 3:
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         else:
             gray = image
 
-        # 1. Original grayscale
-        processed_images.append(gray)
+        # Only use the most effective preprocessing techniques
+        processed_images = [gray]  # Original grayscale
 
-        # 2. Optimized contrast enhancement
+        # Optimized contrast enhancement
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
         enhanced = clahe.apply(gray)
         processed_images.append(enhanced)
 
-        # 3. Optimized thresholding
-        # Otsu's thresholding with light denoising
+        # Optimized thresholding - only use Otsu's method which is most effective
         blur = cv2.GaussianBlur(gray, (3,3), 0)
         _, otsu = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         processed_images.append(otsu)
-
-        # 4. Adaptive thresholding (only one optimal size)
-        thresh = cv2.adaptiveThreshold(
-            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY, 11, 2
-        )
-        processed_images.append(thresh)
-
-        # 5. Morphological operations (only the most effective ones)
-        kernel = np.ones((2,2), np.uint8)
-        
-        # Opening to remove noise
-        opened = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
-        processed_images.append(opened)
-        
-        # Closing to connect components
-        closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
-        processed_images.append(closed)
 
         return processed_images
 
@@ -245,50 +242,51 @@ class ImageExtractor:
         # Remove non-printable characters
         text = ''.join(char for char in text if char.isprintable() or char == '\n')
         
-        # Fix common OCR mistakes
-        replacements = {
-            'l': 'I',     # Common confusion between l and I
-            '0': 'O',     # Common confusion between 0 and O
-            '1': 'I',     # Common confusion between 1 and I
-            'S': '5',     # Common confusion between S and 5
-            'Z': '2',     # Common confusion between Z and 2
-            'G': '6',     # Common confusion between G and 6
-            'B': '8',     # Common confusion between B and 8
-            'rn': 'm',    # Common confusion between 'rn' and 'm'
-            'vv': 'w',    # Common confusion between 'vv' and 'w'
-        }
-        
-        # Split into lines to preserve formatting
-        lines = text.split('\n')
-        cleaned_lines = []
-        
-        for line in lines:
-            words = line.split()
-            cleaned_words = []
+        # Only apply more complex replacements if text is substantial
+        if len(text) > 20:
+            # Split into lines to preserve formatting
+            lines = text.split('\n')
+            cleaned_lines = []
             
-            for word in words:
-                # Fix common OCR mistakes
-                if len(word) == 1 and word in replacements:
-                    word = replacements[word]
-                else:
-                    # Fix multi-character confusions
-                    for old, new in replacements.items():
-                        if len(old) > 1:  # Only apply multi-char replacements
-                            word = word.replace(old, new)
+            for line in lines:
+                words = line.split()
+                cleaned_words = []
                 
-                # Fix case for common patterns
-                if word.isupper() and len(word) > 3:
-                    # Convert to title case if it looks like a regular word
-                    if not any(c.isdigit() for c in word):
-                        word = word.title()
+                for word in words:
+                    # Only apply replacements to words that look like they need it
+                    if any(c in word for c in '01SZGBrnvw'):
+                        # Fix common OCR mistakes - only apply to suspicious words
+                        replacements = {
+                            'rn': 'm',    # Common confusion between 'rn' and 'm'
+                            'vv': 'w',    # Common confusion between 'vv' and 'w'
+                        }
+                        
+                        # Fix multi-character confusions
+                        for old, new in replacements.items():
+                            if old in word:  # Only apply if pattern exists
+                                word = word.replace(old, new)
+                    
+                    cleaned_words.append(word)
                 
-                cleaned_words.append(word)
+                # Join words and add to cleaned lines
+                cleaned_lines.append(' '.join(cleaned_words))
             
-            # Join words and add to cleaned lines
-            cleaned_lines.append(' '.join(cleaned_words))
+            # Join lines with proper spacing
+            return '\n'.join(cleaned_lines)
         
-        # Join lines with proper spacing
-        return '\n'.join(cleaned_lines)
+        return text
+
+    def manage_cache(self, key, value):
+        """Add item to cache with size management"""
+        with self.cache_lock:
+            # If cache is full, remove oldest item
+            if len(self.cache) >= self.max_cache_size:
+                # Remove oldest entry (first key)
+                oldest_key = next(iter(self.cache))
+                del self.cache[oldest_key]
+            
+            # Add new item
+            self.cache[key] = value
 
     def extract_text_from_image(self, image_bytes):
         """Optimized text extraction focusing on speed and accuracy"""
@@ -299,9 +297,10 @@ class ImageExtractor:
                 
             # Check cache first
             cache_key = hash(image_bytes)
-            if cache_key in self.cache:
-                logger.info("Using cached result")
-                return self.cache[cache_key]
+            with self.cache_lock:
+                if cache_key in self.cache:
+                    logger.info("Using cached result")
+                    return self.cache[cache_key]
 
             # Convert bytes to numpy array
             nparr = np.frombuffer(image_bytes, np.uint8)
@@ -309,42 +308,46 @@ class ImageExtractor:
             if image is None:
                 raise Exception("Failed to decode image")
             
-            # Get optimized preprocessed versions
+            # Get optimized preprocessed versions - only use most effective ones
             processed_images = self.preprocess_image(image)
             
-            # Try EasyOCR first (primary OCR)
+            # Try EasyOCR first (primary OCR) - only on original image to save time
             best_text = ""
             best_conf = 0
             
-            # Try EasyOCR on original and enhanced images only
-            for img in processed_images[:2]:  # Original and CLAHE enhanced
-                try:
-                    text, conf = self.extract_text_easyocr(img)
-                    if text and conf > best_conf:
-                        best_text = text
-                        best_conf = conf
-                except Exception as e:
-                    logger.warning(f"EasyOCR failed: {str(e)}")
+            # Try EasyOCR on original image only
+            try:
+                text, conf = self.extract_text_easyocr(processed_images[0])
+                if text and conf > best_conf:
+                    best_text = text
+                    best_conf = conf
+            except Exception as e:
+                logger.warning(f"EasyOCR failed: {str(e)}")
             
             # If EasyOCR gives good results, use it
             if best_conf > 0.7:
                 logger.info(f"Using EasyOCR result with confidence: {best_conf:.2f}")
                 final_text = self.clean_text(best_text)
-                self.cache[cache_key] = final_text
+                self.manage_cache(cache_key, final_text)
                 return final_text
             
             # If EasyOCR results are poor, try Tesseract on preprocessed images
-            tesseract_results = []
-            
+            # Use parallel processing for Tesseract
+            futures = []
             for img in processed_images:
+                futures.append(self.thread_pool.submit(self.extract_text_tesseract, img))
+            
+            # Collect results
+            tesseract_results = []
+            for future in futures:
                 try:
-                    text, conf = self.extract_text_tesseract(img)
+                    text, conf = future.result()
                     if text and conf > 0:
                         tesseract_results.append({
                             'text': text,
                             'conf': conf
                         })
-                except Exception as e:
+                except Exception:
                     continue  # Skip failed attempts
             
             if tesseract_results:
@@ -360,7 +363,7 @@ class ImageExtractor:
             final_text = self.clean_text(best_text)
             
             # Cache the result
-            self.cache[cache_key] = final_text
+            self.manage_cache(cache_key, final_text)
             
             # Log performance metrics
             logger.info(f"Text extracted with confidence: {best_conf:.2f}")
