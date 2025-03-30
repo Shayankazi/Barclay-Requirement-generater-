@@ -250,21 +250,34 @@ const ErrorMessage = styled(motion.div)`
 const getFileTypeMessage = (filename) => {
   const ext = filename.toLowerCase().split('.').pop();
   const types = {
+    // Document formats
     pdf: 'PDF document - Extracting text with enhanced OCR',
     docx: 'Word document - Extracting formatted text',
     txt: 'Text file - Direct text extraction',
-    png: 'Image file - Using advanced OCR with EasyOCR',
-    jpg: 'Image file - Using advanced OCR with EasyOCR',
-    jpeg: 'Image file - Using advanced OCR with EasyOCR',
     xlsx: 'Excel file - Extracting spreadsheet data',
     xls: 'Excel file - Extracting spreadsheet data',
     eml: 'Email file - Parsing email content',
     html: 'Web page - Extracting formatted content',
+    htm: 'Web page - Extracting formatted content',
+    csv: 'CSV file - Extracting spreadsheet data',
+    // Audio formats
     mp3: 'Audio file - Converting speech to text',
     wav: 'Audio file - Converting speech to text',
+    m4a: 'Audio file - Converting speech to text',
+    ogg: 'Audio file - Converting speech to text',
+    // Video formats
     mp4: 'Video file - Extracting audio and converting to text',
     avi: 'Video file - Extracting audio and converting to text',
-    mov: 'Video file - Extracting audio and converting to text'
+    mov: 'Video file - Extracting audio and converting to text',
+    mkv: 'Video file - Extracting audio and converting to text',
+    // Image formats
+    png: 'Image file - Using advanced OCR with EasyOCR',
+    jpg: 'Image file - Using advanced OCR with EasyOCR',
+    jpeg: 'Image file - Using advanced OCR with EasyOCR',
+    tiff: 'Image file - Using advanced OCR with EasyOCR',
+    bmp: 'Image file - Using advanced OCR with EasyOCR',
+    gif: 'Image file - Using advanced OCR with EasyOCR',
+    webp: 'Image file - Using advanced OCR with EasyOCR'
   };
   return types[ext] || 'Processing file...';
 };
@@ -294,7 +307,16 @@ function App() {
   const [error, setError] = useState('');
 
   const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-  const ALLOWED_EXTENSIONS = ['.xlsx', '.xls', '.csv', '.pdf', '.doc', '.docx', '.txt', '.eml', '.html', '.htm'];
+  const ALLOWED_EXTENSIONS = [
+    // Document formats
+    '.xlsx', '.xls', '.csv', '.pdf', '.doc', '.docx', '.txt', '.eml', '.html', '.htm',
+    // Audio formats
+    '.mp3', '.wav', '.m4a', '.ogg',
+    // Video formats
+    '.mp4', '.avi', '.mov', '.mkv',
+    // Image formats
+    '.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.gif', '.webp'
+  ];
   
   const validateFile = (file) => {
     if (!file) return 'Please select a file';

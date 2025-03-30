@@ -82,7 +82,7 @@ class DocumentExtractor:
         except Exception as e:
             raise Exception(f"Error extracting text from TXT: {str(e)}")
 
-    def extract_text(self, file_bytes, file_extension):
+    def extract_text_from_document(self, file_bytes, file_extension):
         """Main method to extract text based on file type"""
         extractors = {
             '.pdf': self.extract_from_pdf,

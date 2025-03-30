@@ -72,8 +72,6 @@ class ImageExtractor:
 
         return processed_images
 
-        return processed_images
-
     def extract_text_easyocr(self, image) -> Tuple[str, float]:
         """Extract text using EasyOCR with confidence filtering and layout analysis"""
         try:
@@ -295,6 +293,10 @@ class ImageExtractor:
     def extract_text_from_image(self, image_bytes):
         """Optimized text extraction focusing on speed and accuracy"""
         try:
+            # Convert bytearray to bytes for hashing
+            if isinstance(image_bytes, bytearray):
+                image_bytes = bytes(image_bytes)
+                
             # Check cache first
             cache_key = hash(image_bytes)
             if cache_key in self.cache:

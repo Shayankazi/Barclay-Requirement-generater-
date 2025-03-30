@@ -99,24 +99,10 @@ def check_tesseract() -> bool:
         logger.error(f"Tesseract not properly configured: {str(e)}")
         return False
 
-# Check if poppler is installed (required for PDF processing)
-def check_poppler() -> bool:
-    try:
-        # Check if pdftoppm (part of poppler-utils) is available
-        result = shutil.which('pdftoppm')
-        if result is None:
-            logger.error("pdftoppm (poppler-utils) not found in PATH")
-            return False
-        return True
-    except Exception as e:
-        logger.error(f"Error checking poppler installation: {str(e)}")
-        return False
-
 @app.get("/health")
 async def health_check():
     checks = {
         "tesseract": check_tesseract(),
-        "poppler": check_poppler()
     }
     return {"status": "healthy", "dependencies": checks}
 
@@ -166,9 +152,7 @@ async def extract_text(file: UploadFile = File(...)):
                 text = image_extractor.extract_text_from_image(content)
             
             elif file_extension in ['.pdf', '.docx', '.txt']:
-                if file_extension == '.pdf' and not check_poppler():
-                    raise HTTPException(status_code=500, detail="PDF dependencies not configured")
-                text = document_extractor.extract_text(content, file_extension)
+                text = document_extractor.extract_text_from_document(content, file_extension)
             
             elif file_extension in ['.xlsx', '.xls']:
                 text = excel_extractor.extract_text_from_excel(content, file_extension)
@@ -188,27 +172,17 @@ async def extract_text(file: UploadFile = File(...)):
             else:
                 raise HTTPException(status_code=400, detail=f"Unsupported file type: {file_extension}")
 
+            if not text.strip():
+                return JSONResponse(
+                    status_code=200,
+                    content={"extracted_text": "No text was extracted from the file. The file might be empty or contain no readable text."}
+                )
+            
             return {"extracted_text": text}
 
         except Exception as e:
             logger.error(f"Error processing file: {str(e)}")
             raise HTTPException(status_code=500, detail=str(e))
-            try:
-                text = content.decode('utf-8')
-            except Exception as e:
-                logger.error(f"Error processing TXT: {str(e)}")
-                raise HTTPException(status_code=500, detail="Error processing text file")
-        
-        else:
-            raise HTTPException(status_code=400, detail=f"Unsupported file type: {file_extension}")
-        
-        if not text.strip():
-            return JSONResponse(
-                status_code=200,
-                content={"extracted_text": "No text was extracted from the file. The file might be empty or contain no readable text."}
-            )
-        
-        return {"extracted_text": text}
     
     except HTTPException:
         raise

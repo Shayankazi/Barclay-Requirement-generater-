@@ -12,11 +12,9 @@ Pillow>=10.0.0
 opencv-python>=4.8.0
 
 # Document Processing
-pdf2image>=1.16.0
-python-docx>=0.8.11
-openpyxl>=3.1.2  # Excel files
-xlrd>=2.0.1     # Legacy Excel (.xls) support
-pandas>=2.0.0    # Data processing
+PyMuPDF>=1.22.3   # PDF processing
+python-docx>=0.8.11  # DOCX processing
+chardet>=5.0.0    # Character encoding detection
 
 # Email Processing
 mail-parser>=3.15.0  # EML files
