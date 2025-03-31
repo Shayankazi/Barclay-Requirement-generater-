@@ -1,0 +1,254 @@
+=== Software Requirements Specification ===
+
+1. Explicit Requirements
+=====================
+
+Appointment Management:
+- [Functional] Patients can book appointments.
+  Source: patients to book appointments
+
+Schedule Management:
+- [Functional] Doctors can manage schedules.
+  Source: doctors to manage schedules
+
+Administrative Operations:
+- [Functional] Administrators can oversee hospital operations.
+  Source: administrators to oversee hospital operations
+
+Patient Records Management:
+- [Functional] The system should maintain patient records.
+  Source: maintain patient records
+
+Consultation Management:
+- [Functional] The system should support online consultations.
+  Source: support online consultations
+
+Insurance Integration:
+- [Functional] The system should integrate with insurance providers.
+  Source: integrate with insurance providers
+
+
+2. Gap Analysis
+=============
+
+Category: Users Management
+Missing: Detailed user management functionalities (patient/doctor registration, profile management, role-based access control).
+Importance: Essential for controlling access to sensitive information and ensuring system security.  Different user types (patients, doctors, admins, nurses, etc.) need different permissions and access levels.
+Standard: HIPAA, GDPR for data privacy and security. Role-Based Access Control (RBAC) is a standard security practice.
+Risk: Unauthorized access, data breaches, and potential legal issues.
+Priority: High
+
+Category: Video Consultation
+Missing: Specific requirements for video consultations (e.g., video quality, recording capabilities, screen sharing, waiting room functionality, integration with medical devices).
+Importance: Ensures high-quality online consultations and supports various telemedicine needs.
+Standard: WebRTC for real-time communication. HIPAA compliant video conferencing platforms are crucial.
+Risk: Poor user experience during online consultations, inability to perform certain diagnostic procedures remotely, potential HIPAA violations.
+Priority: High
+
+Category: Prescription Management
+Missing: Electronic prescribing (e-prescribing) capabilities, including drug interaction checks, formulary management, and integration with pharmacies.
+Importance: Reduces medication errors, improves patient safety, and streamlines the prescription process.
+Standard: E-prescribing standards (e.g., NCPDP SCRIPT).
+Risk: Medication errors, increased administrative burden, delays in filling prescriptions.
+Priority: High
+
+Category: Medical Records
+Missing: Details on how patient records are managed (e.g., data storage, retrieval, access control, data formats).  Interoperability standards for exchanging medical data (e.g., FHIR).
+Importance: Ensures secure storage and retrieval of sensitive patient data and facilitates interoperability with other healthcare systems.
+Standard: HIPAA, GDPR for data privacy and security. HL7 FHIR is the industry standard for healthcare interoperability.
+Risk: Data loss, unauthorized access, difficulty in sharing patient data with other healthcare providers.
+Priority: High
+
+Category: Payment Processing
+Missing: Online payment integration for consultations and other services.
+Importance: Streamlines the payment process for both patients and the hospital.
+Standard: PCI DSS for secure payment processing.
+Risk: Delayed payments, increased administrative burden, potential security risks.
+Priority: High
+
+Category: Notifications
+Missing: Automated notifications for appointments, medication reminders, and other important events.
+Importance: Improves patient engagement and reduces missed appointments.
+Standard: HIPAA compliant notification systems (e.g., SMS, email, push notifications).
+Risk: Missed appointments, reduced patient adherence to treatment plans.
+Priority: Medium
+
+Category: Security & Privacy
+Missing: Specific security and privacy measures, including data encryption, access control, audit trails, and compliance with relevant regulations (e.g., HIPAA, GDPR).
+Importance: Protects sensitive patient data and ensures compliance with legal requirements.
+Standard: HIPAA, GDPR, NIST Cybersecurity Framework.
+Risk: Data breaches, legal penalties, loss of patient trust.
+Priority: High
+
+Category: Reporting & Analytics
+Missing: Reporting and analytics capabilities to track key metrics, such as patient demographics, appointment volumes, and revenue.
+Importance: Provides valuable insights into hospital operations and helps identify areas for improvement.
+Standard: Common reporting and analytics tools and techniques.
+Risk: Inability to track key performance indicators and make data-driven decisions.
+Priority: Medium
+
+
+3. Gap Resolution
+===============
+
+Category: Users Management
+Question: Regarding detailed user management functionalities (patient/doctor registration, profile management, role-based access control)., which approach would you prefer?
+Decision: Implement a robust user management system with registration, login, profile management, and RBAC based on user roles.
+
+Category: Video Consultation
+Question: Regarding specific requirements for video consultations (e.g., video quality, recording capabilities, screen sharing, waiting room functionality, integration with medical devices)., which approach would you prefer?
+Decision: Define video quality requirements, implement recording and screen sharing, consider a virtual waiting room, and ensure HIPAA compliance.
+
+Category: Prescription Management
+Question: Regarding electronic prescribing (e-prescribing) capabilities, including drug interaction checks, formulary management, and integration with pharmacies., which approach would you prefer?
+Decision: Integrate with an e-prescribing platform and ensure compliance with relevant regulations.
+
+Category: Medical Records
+Question: Regarding details on how patient records are managed (e.g., data storage, retrieval, access control, data formats).  interoperability standards for exchanging medical data (e.g., fhir)., which approach would you prefer?
+Decision: Implement secure data storage and retrieval mechanisms, define access control policies, and adopt FHIR for interoperability.
+
+Category: Payment Processing
+Question: Regarding online payment integration for consultations and other services., which approach would you prefer?
+Decision: Integrate with a secure payment gateway and ensure compliance with PCI DSS.
+
+Category: Notifications
+Question: Regarding automated notifications for appointments, medication reminders, and other important events., which approach would you prefer?
+Decision: Implement an automated notification system for appointment reminders, medication refills, and other relevant events.
+
+Category: Security & Privacy
+Question: Regarding specific security and privacy measures, including data encryption, access control, audit trails, and compliance with relevant regulations (e.g., hipaa, gdpr)., which approach would you prefer?
+Decision: Implement robust security measures, including data encryption, access control, audit trails, and regular security assessments.
+
+Category: Reporting & Analytics
+Question: Regarding reporting and analytics capabilities to track key metrics, such as patient demographics, appointment volumes, and revenue., which approach would you prefer?
+Decision: Implement reporting and analytics features to track relevant metrics and generate customized reports.
+
+
+4. Requirement Clarifications
+==========================
+
+Question: What is the cancellation policy for appointments?
+Decision: Patients can cancel up to 24 hours before the appointment with no penalty.
+
+Question: How are emergency appointments handled?
+Decision: Emergency cases are accommodated by rescheduling existing appointments based on urgency.
+
+Question: What is the acceptable response time for loading patient records?
+Decision: Less than 1 second
+
+Question: What is the expected growth in the number of patients and doctors in the next 3 years?
+Decision: 25% growth
+
+Question: What is the acceptable downtime per month for the system?
+Decision: Less than 1 hour
+
+Question: What is the required uptime percentage for the system?
+Decision: 99.5%
+
+Question: What level of encryption should be used for patient data?
+Decision: RSA-2048 encryption
+
+
+5. Known Requirements
+===================
+- {'id': 'F1', 'statement': 'Patients can book appointments.', 'source': 'Explicit', 'priority': 'High', 'dependencies': [], 'acceptance_criteria': ['Patients can search for available appointment slots', 'Patients can select a preferred time and date', 'Patients can confirm and book an appointment']}
+- {'id': 'F2', 'statement': 'Doctors can manage schedules.', 'source': 'Explicit', 'priority': 'High', 'dependencies': [], 'acceptance_criteria': ['Doctors can view their schedules', 'Doctors can add or remove availability', 'Doctors can reschedule appointments']}
+- {'id': 'F3', 'statement': 'Administrators can oversee hospital operations.', 'source': 'Explicit', 'priority': 'High', 'dependencies': [], 'acceptance_criteria': ['Administrators can manage user accounts', 'Administrators can generate reports', 'Administrators can configure system settings']}
+- {'id': 'F4', 'statement': 'The system should maintain patient records.', 'source': 'Explicit', 'priority': 'High', 'dependencies': [], 'acceptance_criteria': ['Patient records are stored securely', 'Patient records can be accessed by authorized personnel', 'Patient records are accurate and up-to-date']}
+- {'id': 'F5', 'statement': 'The system should support online consultations.', 'source': 'Explicit', 'priority': 'High', 'dependencies': [], 'acceptance_criteria': ['Patients can initiate online consultations', 'Doctors can conduct online consultations', 'Consultations can be recorded']}
+- {'id': 'F6', 'statement': 'The system should integrate with insurance providers.', 'source': 'Explicit', 'priority': 'Medium', 'dependencies': [], 'acceptance_criteria': ['Insurance information can be verified', 'Claims can be submitted electronically']}
+- {'id': 'F7', 'statement': 'The system should implement a robust user management system with registration, login, profile management, and RBAC based on user roles (patient, doctor, administrator).', 'source': 'Gap Analysis', 'priority': 'High', 'dependencies': [], 'acceptance_criteria': ['Users can register and create accounts', 'Users can log in securely', 'Users can manage their profiles', 'Access control is enforced based on user roles']}
+- {'id': 'F8', 'statement': 'The system should support video consultations with defined quality requirements, recording and screen sharing capabilities, a virtual waiting room, and HIPAA compliance.', 'source': 'Gap Analysis', 'priority': 'High', 'dependencies': ['F5'], 'acceptance_criteria': ['Video quality meets predefined standards', 'Consultations can be recorded', 'Screen sharing functionality is available', 'A virtual waiting room is implemented', 'HIPAA compliance is ensured']}
+- {'id': 'F9', 'statement': 'The system should integrate with an e-prescribing platform and comply with relevant regulations.', 'source': 'Gap Analysis', 'priority': 'Medium', 'dependencies': [], 'acceptance_criteria': ['Prescriptions can be generated electronically', 'Drug interaction checks are performed', 'Formulary management is supported', 'Relevant regulations are adhered to']}
+- {'id': 'F10', 'statement': 'The system should implement secure data storage and retrieval mechanisms, define access control policies, and adopt FHIR for interoperability.', 'source': 'Gap Analysis', 'priority': 'High', 'dependencies': ['F4'], 'acceptance_criteria': ['Data is stored securely', 'Data can be retrieved efficiently', 'Access control policies are enforced', 'FHIR is used for data exchange']}
+- {'id': 'F11', 'statement': 'The system should integrate with a secure payment gateway and ensure compliance with PCI DSS.', 'source': 'Gap Analysis', 'priority': 'Medium', 'dependencies': [], 'acceptance_criteria': ['Payments can be processed securely', 'PCI DSS compliance is maintained']}
+- {'id': 'F12', 'statement': 'The system should implement an automated notification system for appointment reminders, medication refills, and other relevant events.', 'source': 'Gap Analysis', 'priority': 'Medium', 'dependencies': [], 'acceptance_criteria': ['Notifications are sent automatically', 'Notifications are timely and accurate']}
+- {'id': 'F13', 'statement': 'Patients can cancel appointments up to 24 hours before the scheduled time with no penalty.', 'source': 'Clarification', 'priority': 'Medium', 'dependencies': ['F1'], 'acceptance_criteria': ['Patients can cancel appointments online or via phone', 'Cancellations made within 24 hours are penalty-free']}
+- {'id': 'F14', 'statement': 'Emergency appointments are accommodated by rescheduling existing appointments based on urgency.', 'source': 'Clarification', 'priority': 'High', 'dependencies': ['F1', 'F2'], 'acceptance_criteria': ['A process for handling emergency appointments is defined', 'Existing appointments can be rescheduled to accommodate emergencies']}
+- {'id': 'F15', 'statement': 'The system should implement robust security measures, including data encryption, access control, audit trails, and regular security assessments.', 'source': 'Gap Analysis', 'priority': 'High', 'dependencies': [], 'acceptance_criteria': ['Data is encrypted using strong encryption algorithms', 'Access control mechanisms are in place', 'Audit trails are maintained', 'Regular security assessments are conducted']}
+- {'id': 'F16', 'statement': 'The system should provide reporting and analytics features to track relevant metrics (e.g. patient demographics, appointment volumes, revenue) and generate customized reports.', 'source': 'Gap Analysis', 'priority': 'Medium', 'dependencies': [], 'acceptance_criteria': ['Reports can be generated on key metrics', 'Reports can be customized']}
+
+6. Requirement Gaps
+=================
+
+7. Detailed Requirements
+======================
+
+functional:
+- Patients can book appointments.
+- Doctors can manage schedules.
+- Administrators can oversee hospital operations.
+- The system should maintain patient records.
+- The system should support online consultations.
+- The system should integrate with insurance providers.
+- The system should implement a robust user management system with registration, login, profile management, and RBAC based on user roles (patient, doctor, administrator).
+- The system should support video consultations with defined quality requirements, recording and screen sharing capabilities, a virtual waiting room, and HIPAA compliance.
+- The system should integrate with an e-prescribing platform and comply with relevant regulations.
+- The system should implement secure data storage and retrieval mechanisms, define access control policies, and adopt FHIR for interoperability.
+- The system should integrate with a secure payment gateway and ensure compliance with PCI DSS.
+- The system should implement an automated notification system for appointment reminders, medication refills, and other relevant events.
+- Patients can cancel appointments up to 24 hours before the scheduled time with no penalty.
+- Emergency appointments are accommodated by rescheduling existing appointments based on urgency.
+- The system should implement robust security measures, including data encryption, access control, audit trails, and regular security assessments.
+- The system should provide reporting and analytics features to track relevant metrics (e.g. patient demographics, appointment volumes, revenue) and generate customized reports.
+
+non_functional:
+- The system should load patient records in less than 1 second.
+- The system should be able to handle a 25% growth in the number of patients and doctors over the next 3 years.
+- The system should have less than 1 hour of downtime per month.
+- The system should have 99.5% uptime.
+- Patient data should be encrypted using RSA-2048 encryption.
+
+8. Selected Innovative Features
+============================
+
+No innovative features were selected.
+
+9. Requirements Prioritization (MoSCoW)
+===================================
+
++--------------------------------------------------------------+-----------------+----------------------+----------+
+| Requirement                                                  | Type            | Category             | Priority |
++==============================================================+=================+======================+==========+
+| {'id': 'F7', 'statement': 'The system should implement a rob | Functional      | Core Business Logic  | MUST     |
++--------------------------------------------------------------+-----------------+----------------------+----------+
+| {'id': 'F8', 'statement': 'The system should support video c | Functional      | Core Business Logic  | MUST     |
++--------------------------------------------------------------+-----------------+----------------------+----------+
+| {'id': 'F10', 'statement': 'The system should implement secu | Functional      | Core Business Logic  | MUST     |
++--------------------------------------------------------------+-----------------+----------------------+----------+
+| {'id': 'F11', 'statement': 'The system should integrate with | Functional      | Core Business Logic  | MUST     |
++--------------------------------------------------------------+-----------------+----------------------+----------+
+| {'id': 'F15', 'statement': 'The system should implement robu | Functional      | Core Business Logic  | MUST     |
++--------------------------------------------------------------+-----------------+----------------------+----------+
+| {'id': 'NF1', 'category': 'Performance', 'statement': 'The s | Non-Functional  | System Quality       | MUST     |
++--------------------------------------------------------------+-----------------+----------------------+----------+
+| {'id': 'NF3', 'category': 'Reliability', 'statement': 'The s | Non-Functional  | System Quality       | MUST     |
++--------------------------------------------------------------+-----------------+----------------------+----------+
+| {'id': 'NF4', 'category': 'Availability', 'statement': 'The  | Non-Functional  | System Quality       | MUST     |
++--------------------------------------------------------------+-----------------+----------------------+----------+
+| {'id': 'NF5', 'category': 'Security', 'statement': 'Patient  | Non-Functional  | System Quality       | MUST     |
++--------------------------------------------------------------+-----------------+----------------------+----------+
+| {'id': 'F1', 'statement': 'Patients can book appointments.', | Functional      | Core Business Logic  | SHOULD   |
++--------------------------------------------------------------+-----------------+----------------------+----------+
+| {'id': 'F2', 'statement': 'Doctors can manage schedules.', ' | Functional      | Core Business Logic  | SHOULD   |
++--------------------------------------------------------------+-----------------+----------------------+----------+
+| {'id': 'F3', 'statement': 'Administrators can oversee hospit | Functional      | Core Business Logic  | SHOULD   |
++--------------------------------------------------------------+-----------------+----------------------+----------+
+| {'id': 'F9', 'statement': 'The system should integrate with  | Functional      | Core Business Logic  | SHOULD   |
++--------------------------------------------------------------+-----------------+----------------------+----------+
+| {'id': 'F12', 'statement': 'The system should implement an a | Functional      | Core Business Logic  | SHOULD   |
++--------------------------------------------------------------+-----------------+----------------------+----------+
+| {'id': 'F14', 'statement': 'Emergency appointments are accom | Functional      | Core Business Logic  | SHOULD   |
++--------------------------------------------------------------+-----------------+----------------------+----------+
+| {'id': 'NF2', 'category': 'Scalability', 'statement': 'The s | Non-Functional  | System Quality       | SHOULD   |
++--------------------------------------------------------------+-----------------+----------------------+----------+
+| {'id': 'F13', 'statement': 'Patients can cancel appointments | Functional      | Core Business Logic  | COULD    |
++--------------------------------------------------------------+-----------------+----------------------+----------+
+| {'id': 'F16', 'statement': 'The system should provide report | Functional      | Core Business Logic  | COULD    |
++--------------------------------------------------------------+-----------------+----------------------+----------+
+| {'id': 'F4', 'statement': 'The system should maintain patien | Functional      | Core Business Logic  | WON'T    |
++--------------------------------------------------------------+-----------------+----------------------+----------+
+| {'id': 'F5', 'statement': 'The system should support online  | Functional      | Core Business Logic  | WON'T    |
++--------------------------------------------------------------+-----------------+----------------------+----------+
+| {'id': 'F6', 'statement': 'The system should integrate with  | Functional      | Core Business Logic  | WON'T    |
++--------------------------------------------------------------+-----------------+----------------------+----------+

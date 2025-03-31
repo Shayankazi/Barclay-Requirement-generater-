@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Requirements Analyzer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        #output {
+            white-space: pre-wrap;
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            resize: vertical;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #downloadBtn {
+            display: none;
+            background-color: #2196F3;
+        }
+        #srsSection {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #e8f5e9;
+            border-radius: 5px;
+        }
+        #proceedBtn {
+            background-color: #ff9800;
+        }
+        #downloadSRSBtn {
+            display: none;
+            background-color: #673ab7;
+        }
+        #inputForm {
+            margin-top: 20px;
+        }
+        .input-container {
+            margin-top: 10px;
+        }
+        .download-btn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+        }
+        .btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <h1>Requirements Analyzer</h1>
+    
+    <div>
+        <textarea id="description" placeholder="Enter your project description here..."></textarea>
+    </div>
+    
+    <div>
+        <button id="analyzeBtn" onclick="startAnalysis()">Analyze Requirements</button>
+        <a id="downloadBtn" href="/download" download="requirements_answers.txt">
+            <button type="button">Download Requirements</button>
+        </a>
+    </div>
+
+    <div id="srsSection">
+        <h3>Check the Initial Draft of SRS</h3>
+        <p>If NO changes are required, click on proceed:</p>
+        <button id="proceedBtn" onclick="generateSRS()">Proceed with SRS Generation</button>
+        <a id="downloadSRSBtn" href="/download_srs" download="system_srs.md">
+            <button type="button">Download SRS Document</button>
+        </a>
+        <div id="extraFormats" style="display: none; margin-top: 20px;">
+            <button id="wordBtn" class="btn">Download as Word</button>
+            <button id="pdfBtn" class="btn">Download as PDF</button>
+            <button id="jiraBtn" class="btn">Process in Jira</button>
+            <button id="excelBtn" class="btn" style="display: none;">Download Excel</button>
+        </div>
+    </div>
+
+    <div id="output"></div>
+
+    <div id="inputForm" style="display: none;">
+        <div class="input-container">
+            <p id="questionText"></p>
+            <input type="text" id="userInput">
+            <button onclick="submitInput()">Submit</button>
+        </div>
+    </div>
+
+    <script>
+        let ws;
+        const output = document.getElementById('output');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const srsSection = document.getElementById('srsSection');
+        const proceedBtn = document.getElementById('proceedBtn');
+        const downloadSRSBtn = document.getElementById('downloadSRSBtn');
+        const inputForm = document.getElementById('inputForm');
+        const questionText = document.getElementById('questionText');
+        const userInput = document.getElementById('userInput');
+
+        function connect() {
+            ws = new WebSocket(`ws://${window.location.host}/ws`);
+            
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'output') {
+                    output.textContent += data.message + '\n';
+                    output.scrollTop = output.scrollHeight;
+                }
+                else if (data.type === 'question') {
+                    showInputForm(data.message);
+                }
+                else if (data.type === 'file_ready') {
+                    if (data.message === 'requirements_answers.txt') {
+                        showDownloadButton();
+                        showSRSSection();
+                    } else if (data.message === 'system_srs.md') {
+                        showDownloadSRSButton();
+                    }
+                }
+                else if (data.type === 'error') {
+                    output.textContent += 'Error: ' + data.message + '\n';
+                    output.scrollTop = output.scrollHeight;
+                    analyzeBtn.disabled = false;
+                }
+            };
+
+            ws.onclose = function() {
+                output.textContent += '\nConnection closed. Reconnecting...\n';
+                setTimeout(connect, 1000);
+            };
+
+            ws.onerror = function(err) {
+                output.textContent += '\nWebSocket error: ' + err.message + '\n';
+                analyzeBtn.disabled = false;
+            };
+        }
+
+        function startAnalysis() {
+            const description = document.getElementById('description').value.trim();
+            if (!description) {
+                alert('Please enter a project description');
+                return;
+            }
+
+            analyzeBtn.disabled = true;
+            downloadBtn.style.display = 'none';
+            srsSection.style.display = 'none';
+            downloadSRSBtn.style.display = 'none';
+            output.textContent = '';
+            
+            ws.send(JSON.stringify({
+                type: 'analyze',
+                description: description
+            }));
+        }
+
+        function generateSRS() {
+            proceedBtn.disabled = true;
+            output.textContent = '';
+            
+            ws.send(JSON.stringify({
+                type: 'generate_srs'
+            }));
+        }
+
+        function showInputForm(question) {
+            questionText.textContent = question;
+            userInput.value = '';
+            inputForm.style.display = 'block';
+            userInput.focus();
+        }
+
+        function submitInput() {
+            const response = userInput.value.trim();
+            if (response) {
+                ws.send(JSON.stringify({
+                    type: 'input_response',
+                    value: response
+                }));
+                inputForm.style.display = 'none';
+            }
+        }
+
+        function showDownloadButton() {
+            downloadBtn.style.display = 'inline-block';
+        }
+
+        function showSRSSection() {
+            srsSection.style.display = 'block';
+            proceedBtn.disabled = false;
+        }
+
+        function showDownloadSRSButton() {
+            document.getElementById('downloadSRSBtn').style.display = 'inline-block';
+            document.getElementById('extraFormats').style.display = 'block';
+            
+            // Add event listeners for the new buttons
+            document.getElementById('wordBtn').addEventListener('click', () => {
+                fetch('/convert_srs?format=word')
+                    .then(response => {
+                        if(response.ok) window.location.href = '/download_srs?format=word';
+                    });
+            });
+            
+            document.getElementById('pdfBtn').addEventListener('click', () => {
+                fetch('/convert_srs?format=pdf')
+                    .then(response => {
+                        if(response.ok) window.location.href = '/download_srs?format=pdf';
+                    });
+            });
+            
+            document.getElementById('jiraBtn').addEventListener('click', function() {
+                this.disabled = true;
+                this.textContent = 'Processing...';
+
+                // Add a div for Jira output if it doesn't exist
+                let jiraOutput = document.getElementById('jiraOutput');
+                if (!jiraOutput) {
+                    jiraOutput = document.createElement('div');
+                    jiraOutput.id = 'jiraOutput';
+                    jiraOutput.style.marginTop = '10px';
+                    jiraOutput.style.whiteSpace = 'pre-wrap';
+                    document.getElementById('extraFormats').appendChild(jiraOutput);
+                }
+                
+                fetch('/create_jira_stories', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if(data.success) {
+                        this.textContent = 'Processed in Jira';
+                        document.getElementById('excelBtn').style.display = 'inline-block';
+                        // Show the output in the jiraOutput div
+                        jiraOutput.textContent = data.output || 'Jira stories created successfully!';
+                    } else {
+                        this.textContent = 'Error Processing';
+                        this.disabled = false;
+                        // Show error details
+                        jiraOutput.textContent = `Error: ${data.error}\n\n${data.traceback || ''}`;
+                    }
+                })
+                .catch(error => {
+                    this.textContent = 'Error Processing';
+                    this.disabled = false;
+                    jiraOutput.textContent = `Error: ${error.message}`;
+                });
+            });
+            
+            document.getElementById('excelBtn').addEventListener('click', () => {
+                window.location.href = '/download_excel';
+            });
+        }
+
+        // Handle Enter key in input field
+        userInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                submitInput();
+            }
+        });
+
+        // Initial connection
+        connect();
+    </script>
+</body>
+</html>
