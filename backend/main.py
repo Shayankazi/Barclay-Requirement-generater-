@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Response, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Response, BackgroundTasks, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -15,6 +15,9 @@ from pathlib import Path
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import uvloop
+from pydantic import BaseModel
+
+from nlp import RequirementsGenerator
 
 from extractors.image_extractor import ImageExtractor
 from extractors.document_extractor import DocumentExtractor
@@ -71,6 +74,17 @@ thread_pool = ThreadPoolExecutor(max_workers=8)  # Increased from 4 to 8 for bet
 # Result cache
 RESULT_CACHE_SIZE = 100
 result_cache = {}
+
+# Initialize the RequirementsGenerator
+requirements_generator = RequirementsGenerator(
+    api_key=os.environ.get("GEMINI_API_KEY"),
+    cache_dir=".cache"
+)
+
+# Define Pydantic models for request validation
+class TextInput(BaseModel):
+    text: str
+    format_type: str = "standard"  # default to standard format
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
@@ -232,3 +246,74 @@ async def extract_text(file: UploadFile = File(...), background_tasks: Backgroun
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
     finally:
         await file.close()
+
+# Add a new endpoint for generating requirements from extracted text
+@app.post("/generate-requirements")
+async def generate_requirements(input_data: TextInput):
+    """Generate software requirements from input text."""
+    try:
+        if not input_data.text or len(input_data.text.strip()) < 10:
+            raise HTTPException(
+                status_code=400, 
+                detail="Input text is too short. Please provide more detailed text."
+            )
+        
+        # Process the text using the RequirementsGenerator
+        requirements = await run_in_threadpool(
+            requirements_generator.generate_requirements_statement,
+            input_data.text,
+            input_data.format_type
+        )
+        
+        return {
+            "requirements": requirements,
+            "format": input_data.format_type,
+            "input_length": len(input_data.text),
+            "output_length": len(requirements)
+        }
+    
+    except Exception as e:
+        logger.error(f"Error generating requirements: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating requirements: {str(e)}")
+
+# Add a combined endpoint that extracts text from a file and generates requirements
+@app.post("/extract-and-generate")
+async def extract_and_generate(
+    file: UploadFile = File(...),
+    format_type: str = "standard",
+    background_tasks: BackgroundTasks = None
+):
+    """Extract text from a file and generate requirements in one step."""
+    try:
+        # First extract text from the file
+        extracted_result = await extract_text(file, background_tasks)
+        extracted_text = extracted_result.get("extracted_text", "")
+        
+        if not extracted_text or len(extracted_text.strip()) < 10:
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "warning": "The extracted text was too short to generate meaningful requirements.",
+                    "extracted_text": extracted_text,
+                    "requirements": None
+                }
+            )
+        
+        # Generate requirements from the extracted text
+        requirements = await run_in_threadpool(
+            requirements_generator.generate_requirements_statement,
+            extracted_text,
+            format_type
+        )
+        
+        return {
+            "extracted_text": extracted_text,
+            "requirements": requirements,
+            "format": format_type
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in extract-and-generate: {str(e)}")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")

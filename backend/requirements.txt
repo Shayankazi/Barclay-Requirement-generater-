@@ -39,7 +39,6 @@ tqdm>=4.66.1      # Progress bars
 cachetools>=5.3.1  # For caching
 orjson>=3.9.7     # Faster JSON serialization/deserialization
 
-google-generative-ai==0.3.1
+google-generativeai==0.3.1
 python-dotenv==1.0.0
 markdown2==2.4.10
-tkinter
