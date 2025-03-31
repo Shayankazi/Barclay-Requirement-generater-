@@ -199,32 +199,84 @@ const Button = styled(motion.button)`
 const ResultContainer = styled(motion.div)`
   background: rgba(255, 255, 255, 0.8);
   border-radius: 16px;
-  padding: 2rem;
+  padding: 1.5rem;
   max-height: 400px;
   overflow-y: auto;
-  position: relative;
-  
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.05);
+
   h3 {
+    color: #2d3748;
     font-size: 1.2rem;
     margin-bottom: 1rem;
-    color: #2d3748;
-    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
-  
+
   pre {
     white-space: pre-wrap;
-    word-wrap: break-word;
-    font-family: 'Inter', system-ui, sans-serif;
-    line-height: 1.6;
-    font-size: 0.95rem;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.9rem;
     color: #4a5568;
-    margin: 0;
+    padding: 0.5rem;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.5);
+    overflow-x: auto;
   }
-  
+
   @media (max-width: 768px) {
-    padding: 1.25rem;
+    padding: 1rem;
     max-height: 300px;
+    
+    h3 {
+      font-size: 1.1rem;
+      margin-bottom: 0.75rem;
+    }
+    
+    pre {
+      font-size: 0.8rem;
+    }
   }
+`;
+
+const RequirementsContainer = styled(motion.div)`
+  background: rgba(235, 250, 255, 0.9);
+  border-radius: 16px;
+  padding: 1.5rem;
+  max-height: 500px;
+  overflow-y: auto;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.05);
+  border-left: 4px solid #4facfe;
+
+  h3 {
+    color: #2d3748;
+    font-size: 1.2rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .requirements-text {
+    white-space: pre-wrap;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.9rem;
+    color: #2d3748;
+    padding: 0.5rem;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.7);
+    overflow-x: auto;
+    line-height: 1.6;
+  }
+
+  @media (max-width: 768px) {
+    padding: 1rem;
+    max-height: 350px;
+  }
+`;
+
+const FormatSelector = styled.div`
+  display: none;
 `;
 
 const ErrorMessage = styled(motion.div)`
@@ -339,6 +391,77 @@ const apiService = {
     }
   },
   
+  // New method for the extract-and-generate endpoint
+  extractAndGenerate: async (formData, formatType, onProgress) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      throw new Error('Request timed out. Please try again.');
+    }, 120000); // 120s timeout (longer for this operation)
+    
+    try {
+      const response = await fetch(`${API_URL}/extract-and-generate?format_type=${formatType}`, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({
+          detail: `Server error: ${response.status} ${response.statusText}`
+        }));
+        throw new Error(errorData.detail || 'Failed to process file');
+      }
+      
+      const data = await response.json();
+      return data;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  },
+
+  // Method to generate requirements from already extracted text
+  generateRequirements: async (text, formatType) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      throw new Error('Request timed out. Please try again.');
+    }, 60000); // 60s timeout
+    
+    try {
+      const response = await fetch(`${API_URL}/generate-requirements`, {
+        method: 'POST',
+        body: JSON.stringify({
+          text: text,
+          format_type: formatType
+        }),
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({
+          detail: `Server error: ${response.status} ${response.statusText}`
+        }));
+        throw new Error(errorData.detail || 'Failed to generate requirements');
+      }
+      
+      return await response.json();
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  },
+  
   // Retry logic
   retry: async (fn, retries = 2, delay = 1000) => {
     try {
@@ -379,9 +502,12 @@ const validateFile = (file) => {
 function App() {
   const [file, setFile] = useState(null);
   const [extractedText, setExtractedText] = useState('');
+  const [requirements, setRequirements] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState(0);
+  const [formatType, setFormatType] = useState('standard');
+  const [processingStep, setProcessingStep] = useState('');
 
   // Memoized file validation
   const fileValidationError = useMemo(() => {
@@ -394,6 +520,7 @@ function App() {
     if (selectedFile) {
       setFile(selectedFile);
       setExtractedText('');
+      setRequirements('');
       setError('');
     }
   }, []);
@@ -404,6 +531,7 @@ function App() {
     if (droppedFile) {
       setFile(droppedFile);
       setExtractedText('');
+      setRequirements('');
       setError('');
     }
   }, []);
@@ -412,7 +540,36 @@ function App() {
     e.preventDefault();
   }, []);
 
-  const handleUpload = useCallback(async () => {
+  const handleGenerateRequirements = useCallback(async () => {
+    if (!extractedText || extractedText.trim().length < 10) {
+      setError('Extracted text is too short to generate requirements');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setProcessingStep('Generating requirements...');
+    
+    try {
+      const result = await apiService.retry(() => 
+        apiService.generateRequirements(extractedText, formatType)
+      );
+      
+      if (result && result.requirements) {
+        setRequirements(result.requirements);
+      } else {
+        throw new Error('Failed to generate requirements');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      setError(error.message || 'Error generating requirements. Please try again.');
+    } finally {
+      setLoading(false);
+      setProcessingStep('');
+    }
+  }, [extractedText, formatType]);
+
+  const handleExtractAndGenerate = useCallback(async () => {
     if (!file) {
       setError('Please select a file');
       return;
@@ -426,29 +583,36 @@ function App() {
     setLoading(true);
     setError('');
     setExtractedText('');
+    setRequirements('');
     setProgress(0);
+    setProcessingStep('Extracting text...');
 
     const formData = new FormData();
     formData.append('file', file);
 
     try {
-      // Use the API service with retry logic
-      const text = await apiService.retry(() => 
-        apiService.extractText(formData, (progress) => {
+      // Use the extract-and-generate endpoint
+      const result = await apiService.retry(() => 
+        apiService.extractAndGenerate(formData, formatType, (progress) => {
           setProgress(progress);
         })
       );
       
-      setExtractedText(text);
+      setExtractedText(result.extracted_text || '');
+      setRequirements(result.requirements || '');
+      
+      if (!result.requirements && result.warning) {
+        setError(result.warning);
+      }
     } catch (error) {
       console.error('Error:', error);
-      setError(error.message || 'Error extracting text. Please try again.');
-      setExtractedText('');
+      setError(error.message || 'Error processing file. Please try again.');
     } finally {
       setLoading(false);
       setProgress(0);
+      setProcessingStep('');
     }
-  }, [file, fileValidationError]);
+  }, [file, fileValidationError, formatType]);
 
   // Memoized file type message
   const fileTypeMessage = useMemo(() => {
@@ -468,14 +632,14 @@ function App() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
-            TextractPro
+            Requirements Generator
           </motion.h1>
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.4 }}
           >
-            Extract text from any document in seconds
+            Extract text and generate software requirements
           </motion.p>
         </Logo>
         
@@ -517,7 +681,7 @@ function App() {
         </UploadZone>
 
         <Button
-          onClick={handleUpload}
+          onClick={handleExtractAndGenerate}
           disabled={!file || loading}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
@@ -525,9 +689,9 @@ function App() {
           {loading ? (
             <>
               <Spinner animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} />
-              Processing...
+              {processingStep || 'Processing...'}
             </>
-          ) : 'Extract Text'}
+          ) : 'Extract and Generate Requirements'}
         </Button>
 
         <AnimatePresence>
@@ -553,7 +717,31 @@ function App() {
             >
               <h3>Extracted Text:</h3>
               <pre>{extractedText}</pre>
+              
+              {!requirements && !loading && (
+                <Button 
+                  onClick={handleGenerateRequirements}
+                  disabled={loading}
+                  style={{ marginTop: '1rem' }}
+                >
+                  Generate Requirements
+                </Button>
+              )}
             </ResultContainer>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {requirements && (
+            <RequirementsContainer
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <h3>Generated Requirements:</h3>
+              <div className="requirements-text">{requirements}</div>
+            </RequirementsContainer>
           )}
         </AnimatePresence>
       </Card>
