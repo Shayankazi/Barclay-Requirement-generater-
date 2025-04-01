@@ -725,16 +725,52 @@
             
             // Add event listeners for the new buttons
             document.getElementById('wordBtn').addEventListener('click', () => {
+                const wordBtn = document.getElementById('wordBtn');
+                const originalText = wordBtn.innerHTML;
+                wordBtn.disabled = true;
+                wordBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Converting...';
+                
                 fetch('/convert_srs?format=word')
-                    .then(response => {
-                        if(response.ok) window.location.href = '/download_srs?format=word';
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showNotification('Document converted to Word successfully!', 'success');
+                            window.location.href = '/download_srs?format=word';
+                        } else {
+                            showNotification('Error: ' + data.error, 'error');
+                        }
+                    })
+                    .catch(error => {
+                        showNotification('Error converting document: ' + error.message, 'error');
+                    })
+                    .finally(() => {
+                        wordBtn.disabled = false;
+                        wordBtn.innerHTML = originalText;
                     });
             });
             
             document.getElementById('pdfBtn').addEventListener('click', () => {
+                const pdfBtn = document.getElementById('pdfBtn');
+                const originalText = pdfBtn.innerHTML;
+                pdfBtn.disabled = true;
+                pdfBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Converting...';
+                
                 fetch('/convert_srs?format=pdf')
-                    .then(response => {
-                        if(response.ok) window.location.href = '/download_srs?format=pdf';
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showNotification('Document converted to PDF successfully!', 'success');
+                            window.location.href = '/download_srs?format=pdf';
+                        } else {
+                            showNotification('Error: ' + data.error, 'error');
+                        }
+                    })
+                    .catch(error => {
+                        showNotification('Error converting document: ' + error.message, 'error');
+                    })
+                    .finally(() => {
+                        pdfBtn.disabled = false;
+                        pdfBtn.innerHTML = originalText;
                     });
             });
             
@@ -771,6 +807,12 @@
 
         // Initial connection
         connect();
+
+        // Check for required dependencies 
+        checkDependencies();
+
+        // Add paste event handler to the textarea to detect and fix excessive newlines
+        document.getElementById('description').addEventListener('paste', handleTextPaste);
 
         // OCR Requirement Generator functionality
         const ocrBox = document.getElementById('ocrBox');
@@ -833,30 +875,42 @@
             ocrResult.innerHTML = '<p>Processing file...</p>';
             ocrResult.style.display = 'block';
             
-            const formData = new FormData();
-            formData.append('file', file);
+            // Check file type
+            const fileType = file.type.toLowerCase();
+            const fileName = file.name.toLowerCase();
             
-            fetch('/extract_text', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    processExtractedText(data.text, file.name, data.analyzed_text);
-                } else {
-                    ocrResult.innerHTML = `<p>Error: ${data.error}</p>`;
-                }
-            })
-            .catch(error => {
-                ocrResult.innerHTML = `<p>Error: ${error.message}</p>`;
-                console.error('Error:', error);
-            });
+            if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || 
+                fileType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+                fileType === 'application/vnd.ms-excel') {
+                // Process Excel file
+                processExcelFile(file);
+            } else {
+                // Handle other file types
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                fetch('/extract_text', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        processExtractedText(data.text, file.name, data.analyzed_text);
+                    } else {
+                        ocrResult.innerHTML = `<p>Error: ${data.error}</p>`;
+                    }
+                })
+                .catch(error => {
+                    ocrResult.innerHTML = `<p>Error: ${error.message}</p>`;
+                    console.error('Error:', error);
+                });
+            }
         }
         
         function processContent(content, type) {
@@ -890,10 +944,43 @@
         }
         
         function processExtractedText(text, source, analyzedText = null) {
+            // Ensure text is properly escaped for HTML display
+            const escapeHtml = (str) => {
+                return str
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            };
+            
+            // Normalize text - handle excessive newlines and clean up formatting
+            const normalizeText = (str) => {
+                if (!str) return '';
+                
+                // First normalize newlines
+                str = str.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+                
+                // Check if text has excessive newlines (one word per line pattern)
+                const lines = str.split('\n');
+                const hasExcessiveNewlines = lines.length > 10 && 
+                                            lines.filter(line => line.trim().split(/\s+/).length <= 2).length > lines.length * 0.7;
+                
+                if (hasExcessiveNewlines) {
+                    // Join words with spaces, preserving paragraph breaks (2+ newlines)
+                    str = str.replace(/\n{3,}/g, '\n\n')  // Normalize paragraph breaks first
+                             .replace(/\n\s*\n/g, '\n\n') // Standardize paragraph breaks
+                             .replace(/\n(?!\n)/g, ' ')   // Replace single newlines with spaces
+                             .replace(/\s{2,}/g, ' ');    // Remove extra spaces
+                }
+                
+                return escapeHtml(str);
+            };
+            
             // Create the tab container
             let tabContent = `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <h4 style="margin: 0;">Extracted from: ${source}</h4>
+                    <h4 style="margin: 0;">Extracted from: ${escapeHtml(source)}</h4>
                     <div>
                         <button onclick="useExtractedText('original')" style="background-color: #ff9800;">Use Original Text</button>
                         <button onclick="useExtractedText('analyzed')" style="background-color: #2196F3;">Use Analyzed Requirements</button>
@@ -906,10 +993,10 @@
                     </div>
                     <div class="tab-content">
                         <div id="original-tab" style="display: block;">
-                            <pre class="tab-text">${text}</pre>
+                            <pre class="tab-text">${normalizeText(text)}</pre>
                         </div>
                         <div id="analyzed-tab" style="display: none;">
-                            <pre class="tab-text">${analyzedText || 'Analysis loading...'}</pre>
+                            <pre class="tab-text">${analyzedText ? normalizeText(analyzedText) : 'Analysis loading...'}</pre>
                         </div>
                     </div>
                 </div>
@@ -934,7 +1021,7 @@
                 .then(data => {
                     if (data.success) {
                         // Update the analyzed tab with the response
-                        document.querySelector('#analyzed-tab pre').textContent = data.analyzed_text;
+                        document.querySelector('#analyzed-tab pre').innerHTML = normalizeText(data.analyzed_text);
                         window.analyzedText = data.analyzed_text;
                     } else {
                         document.querySelector('#analyzed-tab pre').textContent = 'Analysis failed: ' + data.error;
@@ -1197,100 +1284,157 @@
             
             reader.onload = function(e) {
                 try {
+                    const data = new Uint8Array(e.target.result);
                     let workbook;
-                    const data = e.target.result;
                     
-                    // Try different methods to read the Excel file
                     try {
-                        workbook = XLSX.read(data, { 
-                            type: 'binary',
-                            cellDates: true,
-                            cellNF: false,
-                            cellText: true,
-                            WTF: false,
-                            codepage: 65001 // UTF-8
-                        });
-                    } catch (err) {
-                        // If binary fails, try array buffer
-                        const arr = new Uint8Array(data);
-                        workbook = XLSX.read(arr, { 
+                        // Try to read as array buffer first (most reliable method)
+                        workbook = XLSX.read(data, {
                             type: 'array',
                             cellDates: true,
                             cellNF: false,
                             cellText: true,
-                            WTF: false,
-                            codepage: 65001 // UTF-8
+                            WTF: true,
+                            codepage: 65001, // UTF-8
+                            raw: false
                         });
+                    } catch (err) {
+                        console.warn('Array buffer read failed, trying binary string:', err);
+                        // Fallback to binary string if array buffer fails
+                        const bstr = new TextDecoder('utf-8').decode(data);
+                        workbook = XLSX.read(bstr, {
+                            type: 'string',
+                            cellDates: true,
+                            cellNF: false,
+                            cellText: true,
+                            WTF: true,
+                            codepage: 65001
+                        });
+                    }
+
+                    if (!workbook || !workbook.SheetNames || workbook.SheetNames.length === 0) {
+                        throw new Error('No sheets found in the Excel file');
                     }
 
                     // Extract text from all sheets
                     let extractedText = `File: ${file.name}\n\n`;
                     let analyzedText = '# Extracted Requirements\n\n';
+                    let hasContent = false;
 
                     workbook.SheetNames.forEach(sheetName => {
                         const worksheet = workbook.Sheets[sheetName];
-                        
-                        // Get the range of the sheet
-                        const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+                        if (!worksheet) return;
+
                         extractedText += `Sheet: ${sheetName}\n`;
                         extractedText += '----------------------------------------\n';
 
-                        // Convert to JSON with specific options for better text extraction
-                        const jsonData = XLSX.utils.sheet_to_json(worksheet, {
-                            header: 1,
-                            raw: false,
-                            dateNF: 'YYYY-MM-DD',
-                            defval: '',
-                            blankrows: false
-                        });
+                        // Get the range of the sheet - handle missing ref
+                        let range;
+                        try {
+                            range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+                        } catch (err) {
+                            console.warn(`Error decoding range for sheet ${sheetName}:`, err);
+                            extractedText += 'Empty or unreadable sheet\n\n';
+                            return; // Skip this sheet and continue with others
+                        }
+                        
+                        // Try different methods to extract data for maximum compatibility
+                        let rows = [];
+                        
+                        try {
+                            // Method 1: Convert to JSON with header row option
+                            rows = XLSX.utils.sheet_to_json(worksheet, {
+                                header: 1,
+                                raw: false,
+                                dateNF: 'YYYY-MM-DD',
+                                defval: '',
+                                blankrows: false
+                            });
+                        } catch (err) {
+                            console.warn(`Error converting sheet ${sheetName} to JSON:`, err);
+                            
+                            try {
+                                // Method 2: Manual cell extraction
+                                rows = [];
+                                const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+                                
+                                for (let r = range.s.r; r <= range.e.r; ++r) {
+                                    const row = [];
+                                    for (let c = range.s.c; c <= range.e.c; ++c) {
+                                        const cell_address = XLSX.utils.encode_cell({r: r, c: c});
+                                        const cell = worksheet[cell_address];
+                                        row.push(cell ? XLSX.utils.format_cell(cell) : '');
+                                    }
+                                    rows.push(row);
+                                }
+                            } catch (err2) {
+                                console.error(`Both methods failed for sheet ${sheetName}:`, err2);
+                                extractedText += 'Error extracting data from this sheet\n\n';
+                                return; // Skip this sheet and continue with others
+                            }
+                        }
 
-                        if (jsonData && jsonData.length > 0) {
+                        if (rows && rows.length > 0) {
+                            hasContent = true;
+                            const headers = rows[0] || [];
+                            
                             // Process each row
-                            jsonData.forEach((row, rowIndex) => {
-                                if (row && row.length > 0) {
-                                    // Convert each cell to string and join with proper spacing
-                                    const rowText = row.map(cell => {
-                                        if (cell === null || cell === undefined) return '';
-                                        // Handle different types of cells
-                                        if (cell.w !== undefined) return cell.w; // Use formatted text if available
-                                        if (cell.v !== undefined) return String(cell.v); // Use raw value as fallback
-                                        return String(cell).trim(); // Convert to string as last resort
-                                    }).join('\t');
-                                    
-                                    if (rowText.trim()) {
-                                        extractedText += rowText + '\n';
-                                    }
-
-                                    // For first row (headers)
-                                    if (rowIndex === 0) {
-                                        extractedText += '-'.repeat(rowText.length) + '\n';
-                                    }
-                                    // Look for requirements in non-header rows
-                                    else if (rowIndex > 0 && row.some(cell => cell)) {
-                                        const headers = jsonData[0];
-                                        headers.forEach((header, colIndex) => {
-                                            if (header) {
-                                                const headerLower = String(header).toLowerCase();
-                                                const cellValue = row[colIndex];
-                                                
-                                                if (cellValue && String(cellValue).trim()) {
-                                                    if (headerLower.includes('requirement') || 
-                                                        headerLower.includes('feature') || 
-                                                        headerLower.includes('description') || 
-                                                        headerLower.includes('story') ||
-                                                        headerLower.includes('task') ||
-                                                        headerLower.includes('function')) {
-                                                        analyzedText += `- **${header}**: ${cellValue}\n`;
-                                                    }
+                            rows.forEach((row, rowIndex) => {
+                                if (!row || row.length === 0) return;
+                                
+                                // For data rows
+                                if (rowIndex > 0) {
+                                    let rowText = '';
+                                    row.forEach((cell, colIndex) => {
+                                        if (cell !== null && cell !== undefined && cell !== '') {
+                                            const header = headers[colIndex] || `Column ${colIndex + 1}`;
+                                            rowText += `${header}: ${cell}\n`;
+                                            
+                                            // Check for requirement-related content
+                                            const headerLower = String(header).toLowerCase();
+                                            const cellText = String(cell);
+                                            if (headerLower.includes('requirement') ||
+                                                headerLower.includes('feature') ||
+                                                headerLower.includes('description') ||
+                                                headerLower.includes('story') ||
+                                                headerLower.includes('task') ||
+                                                headerLower.includes('function') ||
+                                                headerLower.includes('epic') ||
+                                                headerLower.includes('user') ||
+                                                headerLower.includes('test case')) {
+                                                analyzedText += `- **${header}**: ${cellText}\n`;
+                                            }
+                                            
+                                            // Look for requirements in the cell text itself
+                                            if (cellText.length > 10) {
+                                                if (cellText.toLowerCase().includes('shall') ||
+                                                    cellText.toLowerCase().includes('must') ||
+                                                    cellText.toLowerCase().includes('should') ||
+                                                    cellText.toLowerCase().includes('will') ||
+                                                    cellText.match(/req[:\-_\s][0-9]+/i)) {
+                                                    analyzedText += `- **From ${header}**: ${cellText}\n`;
                                                 }
                                             }
-                                        });
+                                        }
+                                    });
+                                    if (rowText) {
+                                        extractedText += rowText + '\n';
                                     }
+                                } else {
+                                    // For header row
+                                    extractedText += row.join('\t') + '\n';
+                                    extractedText += '-'.repeat(40) + '\n';
                                 }
                             });
                             extractedText += '\n';
+                        } else {
+                            extractedText += 'No data found in this sheet\n\n';
                         }
                     });
+
+                    if (!hasContent) {
+                        throw new Error('No data found in any sheet of the Excel file');
+                    }
 
                     if (analyzedText === '# Extracted Requirements\n\n') {
                         analyzedText += 'No specific requirements found in the Excel file.\n\n';
@@ -1299,8 +1443,6 @@
 
                     // Process the extracted text
                     processExtractedText(extractedText, file.name, analyzedText);
-                    showNotification('Excel file processed successfully!', 'success');
-
                 } catch (error) {
                     console.error('Excel processing error:', error);
                     ocrResult.innerHTML = `
@@ -1314,18 +1456,20 @@
                 }
             };
             
-            reader.onerror = function() {
+            reader.onerror = function(error) {
+                console.error('FileReader error:', error);
                 ocrResult.innerHTML = `
                     <div style="color: var(--danger-color); text-align: center; padding: 20px;">
                         <i class="fas fa-exclamation-circle" style="font-size: 24px;"></i>
                         <p style="margin-top: 10px;">Error reading file: ${file.name}</p>
+                        <p style="margin-top: 10px; font-size: 14px;">${error.message || 'Please try again with a different file.'}</p>
                     </div>
                 `;
                 showNotification('Error reading Excel file', 'error');
             };
             
-            // Read as binary string instead of ArrayBuffer
-            reader.readAsBinaryString(file);
+            // Read as ArrayBuffer for better compatibility
+            reader.readAsArrayBuffer(file);
         }
 
         // Add Meeting Minutes functionality
@@ -1379,8 +1523,50 @@
             // Focus on first field
             document.getElementById('meetingTitle').focus();
             
+            // Add paste handler for meeting notes textarea
+            document.getElementById('meetingNotes').addEventListener('paste', handleTextPaste);
+            
             // Scroll to the form
             ocrResult.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Function to handle pasted text with excessive line breaks
+        function handleTextPaste(e) {
+            // Wait a short moment for the paste to complete
+            setTimeout(() => {
+                const text = this.value;
+                if (text) {
+                    // Check if the pasted text has excessive newlines
+                    const lines = text.split('\n');
+                    const hasExcessiveNewlines = lines.length > 10 && 
+                        lines.filter(line => line.trim().split(/\s+/).length <= 2).length > lines.length * 0.7;
+                    
+                    if (hasExcessiveNewlines) {
+                        // Show notice to user
+                        showNotification('Fixing line breaks in pasted text...', 'info');
+                        
+                        // Send to backend for normalization
+                        fetch('/normalize_text', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ text: text })
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                // Update the textarea with normalized text
+                                this.value = data.text;
+                                showNotification('Text formatting has been fixed', 'success');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error normalizing text:', error);
+                        });
+                    }
+                }
+            }, 100);
         }
 
         function processMeetingMinutes() {
@@ -1416,6 +1602,173 @@ ${notes}
         }
         // Add event listener for meeting minutes button
         document.getElementById('meetingBtn').addEventListener('click', showMeetingMinutesForm);
+
+        // Add this before any other JavaScript code
+        function showNotification(message, type = 'info') {
+            // Create notification container if it doesn't exist
+            let container = document.getElementById('notification-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'notification-container';
+                container.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    z-index: 9999;
+                `;
+                document.body.appendChild(container);
+            }
+
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                padding: 12px 24px;
+                margin-bottom: 10px;
+                border-radius: 4px;
+                color: white;
+                font-weight: 500;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+                animation: slideIn 0.3s ease-out;
+                cursor: pointer;
+            `;
+
+            // Set background color based on type
+            switch (type) {
+                case 'success':
+                    notification.style.backgroundColor = 'var(--secondary-color, #34A853)';
+                    break;
+                case 'error':
+                    notification.style.backgroundColor = 'var(--danger-color, #EA4335)';
+                    break;
+                case 'warning':
+                    notification.style.backgroundColor = 'var(--accent-color, #FBBC05)';
+                    break;
+                default:
+                    notification.style.backgroundColor = 'var(--primary-color, #4285F4)';
+            }
+
+            // Add message and icon
+            let icon = '';
+            switch (type) {
+                case 'success':
+                    icon = '✓';
+                    break;
+                case 'error':
+                    icon = '✕';
+                    break;
+                case 'warning':
+                    icon = '⚠';
+                    break;
+                default:
+                    icon = 'ℹ';
+            }
+            notification.innerHTML = `${icon} ${message}`;
+
+            // Add click to dismiss
+            notification.onclick = () => notification.remove();
+
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => notification.remove(), 300);
+            }, 5000);
+
+            // Add to container
+            container.appendChild(notification);
+        }
+
+        // Add CSS animation styles
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes slideOut {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Function to manually fix text formatting
+        function fixTextFormatting() {
+            const textarea = document.getElementById('description');
+            const text = textarea.value;
+            
+            if (!text.trim()) {
+                showNotification('No text to format', 'warning');
+                return;
+            }
+            
+            showNotification('Fixing text formatting...', 'info');
+            
+            fetch('/normalize_text', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ text: text })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    textarea.value = data.text;
+                    showNotification('Text formatting has been fixed', 'success');
+                } else {
+                    showNotification('Error: ' + data.error, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error normalizing text:', error);
+                showNotification('Error processing text', 'error');
+            });
+        }
+
+        // Function to check for required dependencies (pandoc, etc.)
+        function checkDependencies() {
+            // Check for Pandoc (needed for Word/PDF export)
+            fetch('/check_pandoc')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        if (!data.installed) {
+                            // Display warning about missing Pandoc
+                            console.log('Pandoc is not installed. PDF and Word export features will not work.');
+                            
+                            // Create a warning that will be shown when SRS section is displayed
+                            const warningDiv = document.createElement('div');
+                            warningDiv.id = 'pandoc-warning';
+                            warningDiv.style.display = 'none';
+                            warningDiv.innerHTML = `
+                                <div style="background-color: #fff3cd; color: #856404; padding: 10px; 
+                                            border: 1px solid #ffeeba; border-radius: var(--border-radius); margin-top: 15px;">
+                                    <p><strong>Pandoc Not Installed:</strong> The "Download as Word" and "Download as PDF" features 
+                                    require Pandoc to be installed on the server.</p>
+                                    <p>Installation Instructions:</p>
+                                    <ul style="margin-left: 20px;">
+                                        <li><strong>Windows:</strong> ${data.installation_instructions.windows}</li>
+                                        <li><strong>macOS:</strong> ${data.installation_instructions.macos}</li>
+                                        <li><strong>Linux:</strong> ${data.installation_instructions.linux}</li>
+                                    </ul>
+                                </div>
+                            `;
+                            
+                            // Add after the buttons
+                            const extraFormats = document.getElementById('extraFormats');
+                            extraFormats.appendChild(warningDiv);
+                            
+                            // Update the original show function
+                            const originalShowSRSSection = showSRSSection;
+                            window.showSRSSection = function() {
+                                originalShowSRSSection();
+                                document.getElementById('pandoc-warning').style.display = 'block';
+                            };
+                        }
+                    }
+                })
+                .catch(error => console.error('Error checking dependencies:', error));
+        }
     </script>
 </body>
 </html>

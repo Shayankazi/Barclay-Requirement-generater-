@@ -89,7 +89,7 @@ class RequirementsGenerator:
         if api_key:
             try:
                 genai.configure(api_key=api_key)
-                self.model = genai.GenerativeModel('gemini-pro')
+                self.model = genai.GenerativeModel('gemini-pro-1.5-latest')
                 self.use_gemini = True
                 logger.info("Gemini API initialized successfully")
             except Exception as e:

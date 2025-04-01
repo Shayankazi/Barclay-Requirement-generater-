@@ -3,86 +3,84 @@
 1. Explicit Requirements
 =====================
 
-Appointment Management:
-- [Functional] Patients can book appointments.
-  Source: allows patients to book appointments
+Product Search & Discovery:
+- [Functional] Provide search capabilities for users.
+  Source: A retail system for user, data to search that will address the requirements specified in the input text.
 
-- [Functional] Doctors can manage schedules.
-  Source: doctors to manage schedules
+- [Functional] Implement filtering capabilities.
+  Source: The system will provide capabilities for filter, optimize...
 
-Patient Management:
-- [Functional] Maintain patient records.
-  Source: maintain patient records
+Performance & Scalability:
+- [Non-Functional] Ensure robust performance.
+  Source: The implementation must ensure data security, robust performance, and scalability.
 
-- [Functional] Support online consultations.
-  Source: The system should support online consultations
+- [Non-Functional] Ensure system scalability.
+  Source: The implementation must ensure data security, robust performance, and scalability.
 
-Administrative Operations:
-- [Functional] Administrators can oversee hospital operations.
-  Source: administrators to oversee hospital operations
+- [Non-Functional] Maintain optimal performance under high user concurrency and data volume conditions.
+  Source: The system should maintain optimal performance under high user concurrency and data volume conditions.
 
-Insurance Integration:
-- [Functional] Integrate with insurance providers.
-  Source: integrate with insurance providers
+- [Non-Functional] Accommodate future scalability, feature extensions, and evolving business needs.
+  Source: The design should accommodate future scalability, feature extensions, and evolving business needs.
+
+Security & Compliance:
+- [Non-Functional] Ensure data security.
+  Source: The implementation must ensure data security, robust performance, and scalability.
+
+- [Non-Functional] Ensure compliance with industry standards.
+  Source: The system will provide capabilities for filter, optimize while ensuring compliance with industry standards and data security.
+
+- [Non-Functional] Ensure compliance with industry-specific regulations.
+  Source: The system requires integration capabilities and compliance with industry-specific regulations.
+
+Integration:
+- [Functional] Provide integration capabilities.
+  Source: The system requires integration capabilities and compliance with industry-specific regulations.
 
 
 2. Gap Analysis
 =============
 
 Category: Users Management
-Missing: Detailed user roles and permissions management (for patients, doctors, nurses, administrative staff, etc.)
-Importance: Ensures only authorized personnel can access specific functionalities and data, protecting patient privacy and data integrity.
-Standard: HIPAA Privacy Rule, NIST Cybersecurity Framework
-Risk: Unauthorized access to sensitive data, potential data breaches, and legal/compliance issues.
+Missing: User authentication and authorization
+Importance: Essential for controlling access to the retail system and protecting user data.  Different users may have different levels of access (e.g., guest, registered user, administrator).
+Standard: OAuth 2.0, OpenID Connect (OIDC) are widely adopted standards for authentication and authorization.
+Risk: Unauthorized access, data breaches, and potential legal liabilities.
 Priority: High
 
-Category: Prescription Management
-Missing: Ability for doctors to create, send, and manage prescriptions electronically.
-Importance: Streamlines prescription workflows, reduces errors, improves patient safety, and enables convenient prescription refills.
-Standard: E-prescribing guidelines, NCPDP SCRIPT Standard
-Risk: Medication errors, inefficient workflows, and reduced patient satisfaction.
+Category: Administrative Features
+Missing: Administrative dashboard and tools
+Importance: Allows administrators to manage products, users, monitor system performance, and configure system settings.
+Standard: No specific standard, but common practice in retail systems management.
+Risk: Inefficient system management, difficulty in responding to issues, and lack of control over the system.
 Priority: High
+
+Category: Reporting & Analytics
+Missing: Reporting and analytics capabilities
+Importance: Essential for understanding user behavior, product performance, sales trends, and other key metrics to make informed business decisions.
+Standard: No single standard, but common tools and techniques include data warehousing, business intelligence platforms, and reporting tools.
+Risk: Inability to track key metrics, difficulty in identifying trends, and making data-driven decisions.
+Priority: Medium
 
 Category: Payment Processing
-Missing: Secure online payment integration for consultations and other services.
-Importance: Facilitates convenient payment options for patients and improves revenue cycle management for the hospital.
-Standard: PCI DSS compliance for payment processing.
-Risk: Delayed payments, administrative overhead, and potential financial losses.
+Missing: Payment gateway integration (if applicable)
+Importance: Necessary if the retail system involves online transactions. Enables secure processing of payments.
+Standard: PCI DSS (Payment Card Industry Data Security Standard) for secure payment processing.
+Risk: Inability to process online payments, loss of revenue, and security vulnerabilities.
+Priority: Medium
+
+Category: User Experience
+Missing: Specific UX/UI requirements
+Importance: A well-defined UX/UI is crucial for user satisfaction and adoption of the retail system.  This should include considerations for accessibility.
+Standard: WCAG (Web Content Accessibility Guidelines) for accessibility.
+Risk: Poor user experience, low user adoption, and negative impact on brand reputation.
 Priority: High
 
 Category: Notifications
-Missing: Automated appointment reminders, medication reminders, and other relevant notifications for patients and staff.
-Importance: Reduces missed appointments, improves medication adherence, and enhances communication between patients and providers.
-Standard: Best practices for patient engagement and communication.
-Risk: Missed appointments, treatment delays, and reduced patient satisfaction.
-Priority: Medium
-
-Category: Security & Privacy
-Missing: Explicit security measures (e.g., data encryption, access controls, audit trails) to protect patient data and comply with regulations like HIPAA.
-Importance: Ensures patient data confidentiality, integrity, and availability, mitigating the risk of data breaches and legal penalties.
-Standard: HIPAA Security Rule, GDPR, NIST Cybersecurity Framework.
-Risk: Data breaches, legal penalties, reputational damage, and loss of patient trust.
-Priority: High
-
-Category: Performance & Scalability
-Missing: Requirements for system performance, scalability, and availability under different load conditions.
-Importance: Ensures the system remains responsive and reliable even with increasing numbers of users and data volume.
-Standard: Performance testing and capacity planning best practices.
-Risk: System slowdowns, outages, and inability to handle peak demand.
-Priority: Medium
-
-Category: Reporting & Analytics
-Missing: Reporting and analytics capabilities to track key performance indicators (KPIs) and generate insights for hospital management.
-Importance: Provides data-driven insights to improve operational efficiency, optimize resource allocation, and enhance patient care.
-Standard: Healthcare analytics best practices.
-Risk: Inability to track performance, identify areas for improvement, and make informed decisions.
-Priority: Medium
-
-Category: Video Consultation
-Missing: Specific requirements for video quality, platform compatibility, and integration with existing telemedicine platforms.
-Importance: Ensures seamless and high-quality video consultations for patients and providers.
-Standard: Telemedicine platform interoperability standards.
-Risk: Poor video quality, technical difficulties, and disrupted consultations.
+Missing: Notification system for users and administrators
+Importance: Keeps users informed about order updates, promotions, etc.  Allows administrators to be alerted about system issues.
+Standard: No specific standard but best practices include email, SMS, and in-app notifications.
+Risk: Missed updates for users, delayed responses to system issues, and reduced user engagement.
 Priority: Medium
 
 
@@ -90,95 +88,65 @@ Priority: Medium
 ===============
 
 Category: Users Management
-Question: Regarding detailed user roles and permissions management (for patients, doctors, nurses, administrative staff, etc.), which approach would you prefer?
-Decision: Alternative approach to Detailed user roles and permissions management (for patients, doctors, nurses, administrative staff, etc.)
+Question: Regarding user authentication and authorization, which approach would you prefer?
+Decision: Implement user registration, login, and access control mechanisms using a robust authentication framework like OAuth 2.0 or OIDC.
 
-Category: Prescription Management
-Question: Regarding ability for doctors to create, send, and manage prescriptions electronically., which approach would you prefer?
-Decision: Custom implementation
-
-Category: Payment Processing
-Question: Regarding secure online payment integration for consultations and other services., which approach would you prefer?
-Decision: Alternative approach to Secure online payment integration for consultations and other services.
-
-Category: Notifications
-Question: Regarding automated appointment reminders, medication reminders, and other relevant notifications for patients and staff., which approach would you prefer?
-Decision: Implement a notification system using email, SMS, or in-app notifications.
-
-Category: Security & Privacy
-Question: Regarding explicit security measures (e.g., data encryption, access controls, audit trails) to protect patient data and comply with regulations like hipaa., which approach would you prefer?
-Decision: Alternative approach to Explicit security measures (e.g., data encryption, access controls, audit trails) to protect patient data and comply with regulations like HIPAA.
-
-Category: Performance & Scalability
-Question: Regarding requirements for system performance, scalability, and availability under different load conditions., which approach would you prefer?
-Decision: Conduct performance testing, implement scalable infrastructure, and establish disaster recovery procedures.
+Category: Administrative Features
+Question: Regarding administrative dashboard and tools, which approach would you prefer?
+Decision: Alternative approach to Administrative dashboard and tools
 
 Category: Reporting & Analytics
-Question: Regarding reporting and analytics capabilities to track key performance indicators (kpis) and generate insights for hospital management., which approach would you prefer?
-Decision: Alternative approach to Reporting and analytics capabilities to track key performance indicators (KPIs) and generate insights for hospital management.
+Question: Regarding reporting and analytics capabilities, which approach would you prefer?
+Decision: Integrate a reporting and analytics module that allows for data collection, analysis, and visualization.  Consider using a pre-built analytics platform or building a custom solution.
 
-Category: Video Consultation
-Question: Regarding specific requirements for video quality, platform compatibility, and integration with existing telemedicine platforms., which approach would you prefer?
-Decision: Define video quality requirements, ensure platform compatibility, and consider integration with existing telemedicine platforms.
+Category: Payment Processing
+Question: Regarding payment gateway integration (if applicable), which approach would you prefer?
+Decision: Custom implementation
+
+Category: User Experience
+Question: Regarding specific ux/ui requirements, which approach would you prefer?
+Decision: Conduct user research and design a user-friendly and intuitive interface.  Adhere to accessibility guidelines.
+
+Category: Notifications
+Question: Regarding notification system for users and administrators, which approach would you prefer?
+Decision: Alternative approach to Notification system for users and administrators
 
 
 4. Requirement Clarifications
 ==========================
 
-Question: What is the process for handling appointment cancellations and rescheduling by patients?
-Decision: Patients can cancel/reschedule online up to 24 hours before the appointment.
+Question: What type of search functionality should be implemented?
+Decision: Keyword-based search with auto-suggestions and spell check
 
-Question: How are no-shows handled?
-Decision: Manual follow-up call by clinic staff after each no-show.
+Question: How should product filtering be implemented?
+Decision: Client-side filtering using JavaScript frameworks
 
-Question: What is the acceptable response time for loading patient records?
-Decision: Between 1-3 seconds
+Question: What is the acceptable average response time for search queries?
+Decision: Under 200 milliseconds
 
-Question: What is the anticipated growth in patient volume over the next 3 years?
-Decision: Less than 10%
+Question: What database technology should be used to handle product data?
+Decision: NoSQL database (e.g., MongoDB) for flexible schema and horizontal scaling
 
-Question: What is the acceptable Mean Time Between Failures (MTBF) for the system?
-Decision: 99.99%
+Question: What level of data encryption should be implemented for sensitive customer data?
+Decision: Encryption at rest and in transit using AES-256
 
-Question: What is the required system uptime?
-Decision: 99.9%
+Question: What specific industry regulations (e.g., PCI DSS, GDPR) apply to the system?
+Decision: PCI DSS and HIPAA
 
-Question: What level of encryption will be used for patient data?
-Decision: 256-bit AES encryption
-
-Question: What is the expected frequency of system updates and maintenance?
-Decision: Quarterly
-
-Question: What operating systems should the system support?
-Decision: Windows, macOS, and Linux
-
-Question: What user interface design principles will be followed?
-Decision: Human-centered design principles
-
-Question: Which existing hospital systems need to be integrated with?
-Decision: HIS, EMR, and PACS
-
-Question: What level of documentation will be provided?
-Decision: User manuals and API documentation
-
-Question: What specific regulatory compliance requirements need to be met?
-Decision: HIPAA, GDPR, and CCPA
+Question: What systems need to be integrated with the retail system?
+Decision: Inventory management, payment gateway, and CRM
 
 
 5. Known Requirements
 ===================
-- {'id': 'F1', 'statement': 'Patients can book appointments.', 'source': 'Explicit - Appointment Management', 'priority': 'High', 'dependencies': [], 'acceptance_criteria': ['Patients can search for available appointment slots.', 'Patients can select a preferred time slot.', 'Patients can confirm and book the appointment.']}
-- {'id': 'F2', 'statement': 'Doctors can manage schedules.', 'source': 'Explicit - Appointment Management', 'priority': 'High', 'dependencies': [], 'acceptance_criteria': ['Doctors can view their appointment schedule.', 'Doctors can add or remove available slots.', 'Doctors can block out time for unavailability.']}
-- {'id': 'F3', 'statement': 'The system shall maintain patient records.', 'source': 'Explicit - Patient Management', 'priority': 'High', 'dependencies': [], 'acceptance_criteria': ['The system shall store patient demographics, medical history, and current medications.', 'The system shall allow authorized personnel to access and update patient records.']}
-- {'id': 'F4', 'statement': 'The system shall support online consultations.', 'source': 'Explicit - Patient Management', 'priority': 'High', 'dependencies': ['F3', 'NF16'], 'acceptance_criteria': ['Patients can initiate video consultations with doctors.', 'Doctors can conduct consultations remotely.']}
-- {'id': 'F5', 'statement': 'Administrators can oversee hospital operations.', 'source': 'Explicit - Administrative Operations', 'priority': 'Medium', 'dependencies': [], 'acceptance_criteria': ['Administrators can generate reports on hospital activity.', 'Administrators can manage user accounts and permissions.']}
-- {'id': 'F6', 'statement': 'The system shall integrate with insurance providers.', 'source': 'Explicit - Insurance Integration', 'priority': 'Medium', 'dependencies': [], 'acceptance_criteria': ['The system shall verify patient insurance eligibility.', 'The system shall submit claims to insurance providers.']}
-- {'id': 'F7', 'statement': 'The system shall support detailed user roles and permissions management.', 'source': 'Gap - Users Management', 'priority': 'High', 'dependencies': [], 'acceptance_criteria': ['Different user roles (patient, doctor, nurse, admin) shall have different levels of system access.']}
-- {'id': 'F8', 'statement': 'Doctors can create, send, and manage prescriptions electronically.', 'source': 'Gap - Prescription Management', 'priority': 'High', 'dependencies': ['F3'], 'acceptance_criteria': ['Doctors can create prescriptions electronically.', 'Doctors can send prescriptions to pharmacies electronically.', 'Doctors can view and manage previously issued prescriptions.']}
-- {'id': 'F9', 'statement': 'The system shall support secure online payment processing.', 'source': 'Gap - Payment Processing', 'priority': 'High', 'dependencies': [], 'acceptance_criteria': ['Patients can make secure online payments for consultations and other services.']}
-- {'id': 'F10', 'statement': 'The system shall provide automated notifications.', 'source': 'Gap - Notifications', 'priority': 'Medium', 'dependencies': [], 'acceptance_criteria': ['Patients receive appointment reminders.', 'Patients receive medication reminders.', 'Staff receive relevant notifications.']}
-- {'id': 'F11', 'statement': 'Patients can cancel/reschedule appointments online up to 24 hours before the appointment.', 'source': 'Clarification - Core Business Logic', 'priority': 'High', 'dependencies': ['F1'], 'acceptance_criteria': ['The system allows patients to cancel appointments online.', 'The system allows patients to reschedule appointments online.', 'Cancellations/rescheduling are allowed up to 24 hours before the appointment.']}
-- {'id': 'F12', 'statement': 'Clinic staff can manually follow-up on no-shows.', 'source': 'Clarification - Core Business Logic', 'priority': 'Medium', 'dependencies': [], 'acceptance_criteria': ['The system allows staff to record no-shows.', 'The system allows staff to document follow-up actions.']}
+- {'id': 'F1', 'statement': 'The system shall provide keyword-based search capabilities with auto-suggestions and spell check.', 'source': 'Explicit/Clarification', 'priority': 'High', 'dependencies': [], 'acceptance_criteria': ['Users can search for products using keywords.', 'The system provides auto-suggestions as the user types.', 'The system offers spell check suggestions for misspelled keywords.']}
+- {'id': 'F2', 'statement': 'The system shall implement client-side filtering using JavaScript frameworks.', 'source': 'Explicit/Clarification', 'priority': 'High', 'dependencies': [], 'acceptance_criteria': ['Users can filter products based on various attributes (e.g., price, category, brand).', 'Filtering is performed on the client-side for improved performance.']}
+- {'id': 'F3', 'statement': 'The system shall provide integration capabilities with inventory management, payment gateway, and CRM systems.', 'source': 'Explicit/Clarification', 'priority': 'High', 'dependencies': [], 'acceptance_criteria': ['Data is seamlessly exchanged between the retail system and the integrated systems.']}
+- {'id': 'F4', 'statement': 'The system shall implement user registration, login, and access control mechanisms using a robust authentication framework like OAuth 2.0 or OIDC.', 'source': 'Gap Analysis', 'priority': 'High', 'dependencies': [], 'acceptance_criteria': ['Users can register and create accounts.', 'Users can log in securely using their credentials.', 'Access control mechanisms restrict access to authorized users.']}
+- {'id': 'F5', 'statement': 'The system shall integrate a reporting and analytics module that allows for data collection, analysis, and visualization.', 'source': 'Gap Analysis', 'priority': 'Medium', 'dependencies': [], 'acceptance_criteria': ['Data is collected and stored for analysis.', 'Users can generate reports and visualize data.']}
+- {'id': 'F6', 'statement': 'The system shall implement a custom payment processing solution.', 'source': 'Gap Analysis', 'priority': 'Medium', 'dependencies': [], 'acceptance_criteria': ['The system can process payments securely.']}
+- {'id': 'F7', 'statement': 'The system shall have administrative dashboard and tools.', 'source': 'Gap Analysis', 'priority': 'Medium', 'dependencies': [], 'acceptance_criteria': ['Administrators have access to tools for managing the system.']}
+- {'id': 'F8', 'statement': 'The system shall implement a notification system for users and administrators.', 'source': 'Gap Analysis', 'priority': 'Low', 'dependencies': [], 'acceptance_criteria': ['Users and administrators receive notifications for relevant events.']}
 
 6. Requirement Gaps
 =================
@@ -187,36 +155,23 @@ Decision: HIPAA, GDPR, and CCPA
 ======================
 
 functional:
-- Patients can book appointments.
-- Doctors can manage schedules.
-- The system shall maintain patient records.
-- The system shall support online consultations.
-- Administrators can oversee hospital operations.
-- The system shall integrate with insurance providers.
-- The system shall support detailed user roles and permissions management.
-- Doctors can create, send, and manage prescriptions electronically.
-- The system shall support secure online payment processing.
-- The system shall provide automated notifications.
-- Patients can cancel/reschedule appointments online up to 24 hours before the appointment.
-- Clinic staff can manually follow-up on no-shows.
+- The system shall provide keyword-based search capabilities with auto-suggestions and spell check.
+- The system shall implement client-side filtering using JavaScript frameworks.
+- The system shall provide integration capabilities with inventory management, payment gateway, and CRM systems.
+- The system shall implement user registration, login, and access control mechanisms using a robust authentication framework like OAuth 2.0 or OIDC.
+- The system shall integrate a reporting and analytics module that allows for data collection, analysis, and visualization.
+- The system shall implement a custom payment processing solution.
+- The system shall have administrative dashboard and tools.
+- The system shall implement a notification system for users and administrators.
 
 non_functional:
-- The system shall load patient records within 1-3 seconds.
-- The system shall support a 10% growth in patient volume over the next 3 years.
-- The system shall have a 99.99% MTBF.
-- The system shall have 99.9% uptime.
-- Patient data shall be encrypted using 256-bit AES encryption.
-- System updates and maintenance shall occur quarterly.
-- The system shall support Windows, macOS, and Linux operating systems.
-- The system's user interface shall follow human-centered design principles.
-- The system shall integrate with existing HIS, EMR, and PACS systems.
-- The system shall provide user manuals and API documentation.
-- The system shall comply with HIPAA, GDPR, and CCPA regulations.
-- The system shall implement robust security measures to protect patient data.
-- The system shall exhibit acceptable performance and scalability under different load conditions.
-- The system shall provide reporting and analytics capabilities to track KPIs and generate insights.
-- The system shall adhere to defined video quality requirements and be compatible with relevant platforms.
-- The system should consider integration with existing telemedicine platforms.
+- The system shall maintain an average response time for search queries under 200 milliseconds.
+- The system shall maintain optimal performance under high user concurrency and data volume conditions.
+- The design shall accommodate future scalability, feature extensions, and evolving business needs.
+- The system shall implement encryption at rest and in transit using AES-256 for sensitive customer data.
+- The system shall ensure compliance with PCI DSS and HIPAA regulations.
+- The system shall ensure compliance with general industry standards for data security.
+- The system shall have a user-friendly and intuitive interface that adheres to accessibility guidelines.
 
 8. Selected Innovative Features
 ============================
@@ -229,59 +184,33 @@ No innovative features were selected.
 +--------------------------------------------------------------+-----------------+----------------------+----------+
 | Requirement                                                  | Type            | Category             | Priority |
 +==============================================================+=================+======================+==========+
-| {'id': 'F3', 'statement': 'The system shall maintain patient | Functional      | Core Business Logic  | MUST     |
+| {'id': 'F3', 'statement': 'The system shall provide integrat | Functional      | Core Business Logic  | MUST     |
 +--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'F6', 'statement': 'The system shall integrate with i | Functional      | Core Business Logic  | MUST     |
+| {'id': 'F4', 'statement': 'The system shall implement user r | Functional      | Core Business Logic  | MUST     |
 +--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'F7', 'statement': 'The system shall support detailed | Functional      | Core Business Logic  | MUST     |
+| {'id': 'F6', 'statement': 'The system shall implement a cust | Functional      | Core Business Logic  | MUST     |
 +--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'F9', 'statement': 'The system shall support secure o | Functional      | Core Business Logic  | MUST     |
-+--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'F10', 'statement': 'The system shall provide automat | Functional      | Core Business Logic  | MUST     |
-+--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'F11', 'statement': 'Patients can cancel/reschedule a | Functional      | Core Business Logic  | MUST     |
-+--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'F12', 'statement': 'Clinic staff can manually follow | Functional      | Core Business Logic  | MUST     |
+| {'id': 'F7', 'statement': 'The system shall have administrat | Functional      | Core Business Logic  | MUST     |
 +--------------------------------------------------------------+-----------------+----------------------+----------+
 | {'id': 'NF1', 'category': 'Performance', 'statement': 'The s | Non-Functional  | System Quality       | MUST     |
 +--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'NF2', 'category': 'Scalability', 'statement': 'The s | Non-Functional  | System Quality       | MUST     |
+| {'id': 'NF2', 'category': 'Performance', 'statement': 'The s | Non-Functional  | System Quality       | MUST     |
 +--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'NF3', 'category': 'Reliability', 'statement': 'The s | Non-Functional  | System Quality       | MUST     |
+| {'id': 'NF3', 'category': 'Performance', 'statement': 'The d | Non-Functional  | System Quality       | MUST     |
 +--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'NF4', 'category': 'Availability', 'statement': 'The  | Non-Functional  | System Quality       | MUST     |
+| {'id': 'NF4', 'category': 'Security', 'statement': 'The syst | Non-Functional  | System Quality       | MUST     |
 +--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'NF5', 'category': 'Security', 'statement': 'Patient  | Non-Functional  | System Quality       | MUST     |
+| {'id': 'NF5', 'category': 'Security', 'statement': 'The syst | Non-Functional  | System Quality       | MUST     |
 +--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'NF6', 'category': 'Maintainability', 'statement': 'S | Non-Functional  | System Quality       | MUST     |
+| {'id': 'NF6', 'category': 'Security', 'statement': 'The syst | Non-Functional  | System Quality       | MUST     |
 +--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'NF7', 'category': 'Portability', 'statement': 'The s | Non-Functional  | System Quality       | MUST     |
+| {'id': 'NF7', 'category': 'Usability', 'statement': 'The sys | Non-Functional  | System Quality       | MUST     |
 +--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'NF8', 'category': 'Usability', 'statement': "The sys | Non-Functional  | System Quality       | MUST     |
+| {'id': 'F1', 'statement': 'The system shall provide keyword- | Functional      | Core Business Logic  | SHOULD   |
 +--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'NF9', 'category': 'Compatibility', 'statement': 'The | Non-Functional  | System Quality       | MUST     |
+| {'id': 'F5', 'statement': 'The system shall integrate a repo | Functional      | Core Business Logic  | SHOULD   |
 +--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'NF10', 'category': 'Documentation', 'statement': 'Th | Non-Functional  | System Quality       | MUST     |
+| {'id': 'F8', 'statement': 'The system shall implement a noti | Functional      | Core Business Logic  | SHOULD   |
 +--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'NF11', 'category': 'Compliance', 'statement': 'The s | Non-Functional  | System Quality       | MUST     |
-+--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'NF12', 'category': 'Security', 'statement': 'The sys | Non-Functional  | System Quality       | MUST     |
-+--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'NF13', 'category': 'Performance', 'statement': 'The  | Non-Functional  | System Quality       | MUST     |
-+--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'NF14', 'category': 'Reporting and Analytics', 'state | Non-Functional  | System Quality       | MUST     |
-+--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'NF15', 'category': 'Video Consultation', 'statement' | Non-Functional  | System Quality       | MUST     |
-+--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'F4', 'statement': 'The system shall support online c | Functional      | Core Business Logic  | SHOULD   |
-+--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'F8', 'statement': 'Doctors can create, send, and man | Functional      | Core Business Logic  | SHOULD   |
-+--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'NF16', 'category': 'Video Consultation', 'statement' | Non-Functional  | System Quality       | SHOULD   |
-+--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'F1', 'statement': 'Patients can book appointments.', | Functional      | Core Business Logic  | COULD    |
-+--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'F2', 'statement': 'Doctors can manage schedules.', ' | Functional      | Core Business Logic  | COULD    |
-+--------------------------------------------------------------+-----------------+----------------------+----------+
-| {'id': 'F5', 'statement': 'Administrators can oversee hospit | Functional      | Core Business Logic  | COULD    |
+| {'id': 'F2', 'statement': 'The system shall implement client | Functional      | Core Business Logic  | COULD    |
 +--------------------------------------------------------------+-----------------+----------------------+----------+

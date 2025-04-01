@@ -348,41 +348,137 @@ async def download_requirements():
 async def convert_srs(format: str):
     """Convert SRS to different formats"""
     try:
+        # Check if the system_srs.md file exists
+        if not os.path.exists("system_srs.md"):
+            return JSONResponse({
+                "success": False,
+                "error": "SRS file not found. Please generate SRS document first."
+            }, status_code=404)
+        
+        # Check if pandoc is installed
+        try:
+            # Use the 'which' command on Unix/Linux or 'where' on Windows to check if pandoc is in PATH
+            if os.name == 'nt':  # Windows
+                subprocess.run(["where", "pandoc"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            else:  # Unix/Linux
+                subprocess.run(["which", "pandoc"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except subprocess.CalledProcessError:
+            return JSONResponse({
+                "success": False,
+                "error": "Pandoc is not installed. Please install Pandoc to convert documents."
+            }, status_code=500)
+        
+        # Convert based on the requested format
+        output_file = ""
         if format == "word":
-            subprocess.run(["pandoc", "system_srs.md", "-o", "system_srs.docx"], check=True)
-            return JSONResponse({"success": True})
+            output_file = "system_srs.docx"
+            subprocess.run(["pandoc", "system_srs.md", "-o", output_file], 
+                           check=True, stderr=subprocess.PIPE)
         elif format == "pdf":
-            subprocess.run(["pandoc", "system_srs.md", "-o", "system_srs.pdf"], check=True)
-            return JSONResponse({"success": True})
+            output_file = "system_srs.pdf"
+            subprocess.run(["pandoc", "system_srs.md", "-o", output_file], 
+                           check=True, stderr=subprocess.PIPE)
         else:
-            raise HTTPException(status_code=400, detail="Invalid format")
+            return JSONResponse({
+                "success": False,
+                "error": "Invalid format. Supported formats are 'word' and 'pdf'."
+            }, status_code=400)
+        
+        # Verify the output file was created
+        if not os.path.exists(output_file):
+            return JSONResponse({
+                "success": False,
+                "error": f"Conversion failed. Output file '{output_file}' was not created."
+            }, status_code=500)
+            
+        return JSONResponse({"success": True})
+    except subprocess.CalledProcessError as e:
+        error_message = e.stderr.decode('utf-8') if e.stderr else str(e)
+        logger.error(f"Error during Pandoc conversion: {error_message}")
+        return JSONResponse({
+            "success": False,
+            "error": f"Pandoc conversion error: {error_message}"
+        }, status_code=500)
     except Exception as e:
         logger.error(f"Error converting SRS: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse({
+            "success": False,
+            "error": f"Error converting document: {str(e)}"
+        }, status_code=500)
 
 @app.get("/download_srs")
 async def download_srs(format: str = None):
     """Download SRS in various formats"""
     try:
+        # Default to markdown if no format is specified
         if not format or format == "md":
             if not os.path.exists("system_srs.md"):
-                raise HTTPException(status_code=404, detail="SRS file not found")
+                return JSONResponse({
+                    "success": False,
+                    "error": "SRS file not found. Please generate SRS document first."
+                }, status_code=404)
+            
             return FileResponse(
                 path="system_srs.md",
                 filename="system_srs.md",
                 media_type="text/markdown"
             )
+        
+        # Handle Word format
         elif format == "word":
             if not os.path.exists("system_srs.docx"):
-                raise HTTPException(status_code=404, detail="Word file not found")
-            return FileResponse("system_srs.docx", filename="system_srs.docx")
+                # Check if Markdown file exists to recommend conversion
+                if os.path.exists("system_srs.md"):
+                    return JSONResponse({
+                        "success": False,
+                        "error": "Word file not found. Please convert to Word format first."
+                    }, status_code=404)
+                else:
+                    return JSONResponse({
+                        "success": False,
+                        "error": "SRS document not found. Please generate SRS document first."
+                    }, status_code=404)
+            
+            return FileResponse(
+                path="system_srs.docx",
+                filename="system_srs.docx",
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+        
+        # Handle PDF format
         elif format == "pdf":
             if not os.path.exists("system_srs.pdf"):
-                raise HTTPException(status_code=404, detail="PDF file not found")
-            return FileResponse("system_srs.pdf", filename="system_srs.pdf")
+                # Check if Markdown file exists to recommend conversion
+                if os.path.exists("system_srs.md"):
+                    return JSONResponse({
+                        "success": False,
+                        "error": "PDF file not found. Please convert to PDF format first."
+                    }, status_code=404)
+                else:
+                    return JSONResponse({
+                        "success": False,
+                        "error": "SRS document not found. Please generate SRS document first."
+                    }, status_code=404)
+            
+            return FileResponse(
+                path="system_srs.pdf",
+                filename="system_srs.pdf",
+                media_type="application/pdf"
+            )
+        
+        # Handle unknown format
+        else:
+            return JSONResponse({
+                "success": False,
+                "error": f"Unsupported format: {format}. Supported formats are 'md', 'word', and 'pdf'."
+            }, status_code=400)
+            
     except Exception as e:
         logger.error(f"Download SRS error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse({
+            "success": False,
+            "error": f"Error downloading SRS document: {str(e)}"
+        }, status_code=500)
 
 @app.post("/create_jira_stories")
 async def create_jira_stories():
@@ -620,6 +716,8 @@ async def process_content(request: ContentRequest):
         try:
             if text:
                 analyzed_text = nlp_analyzer.generate_requirements_statement(text)
+                # Format the markdown for proper display
+                analyzed_text = format_markdown_output(analyzed_text)
         except Exception as nlp_error:
             logger.error(f"NLP processing error: {str(nlp_error)}")
             analyzed_text = f"Error processing text with NLP: {str(nlp_error)}"
@@ -750,16 +848,36 @@ def clean_extracted_text(text: str) -> str:
     if not text:
         return ""
     
-    # Replace multiple newlines with a single newline
-    text = re.sub(r'\n{3,}', '\n\n', text)
+    # Normalize line endings
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
     
-    # Remove leading/trailing whitespace from each line
-    lines = [line.strip() for line in text.splitlines()]
+    # Check for excessive newlines - when most lines have just a single word
+    lines = text.splitlines()
+    if len(lines) > 10:
+        # Check if a high percentage of lines contain just 1-2 words
+        single_word_lines = sum(1 for line in lines if len(line.strip().split()) <= 2)
+        if single_word_lines > len(lines) * 0.7:  # If over 70% of lines are just 1-2 words
+            # Join words with spaces, preserving paragraph breaks (2+ newlines)
+            # First mark real paragraph breaks
+            text = re.sub(r'\n{3,}', '\n\n<PARAGRAPH_BREAK>\n\n', text)
+            # Convert single newlines to spaces
+            text = re.sub(r'\n(?!\n)', ' ', text)
+            # Restore proper paragraph breaks
+            text = text.replace('<PARAGRAPH_BREAK>', '')
+            # Clean up excessive whitespace
+            text = re.sub(r' {2,}', ' ', text)
+    else:
+        # Replace multiple newlines with a single newline
+        text = re.sub(r'\n{3,}', '\n\n', text)
     
-    # Join the lines back together
-    text = '\n'.join(line for line in lines if line)
+    # Clean excessive whitespace but preserve intentional indentation
+    text = re.sub(r'[ \t]+$', '', text, flags=re.MULTILINE)  # Remove trailing whitespace
+    text = re.sub(r'^[ \t]+$', '', text, flags=re.MULTILINE)  # Remove lines with only whitespace
     
-    return text
+    # Fix bullet points and lists that might have been broken
+    text = re.sub(r'([•\-*]) +', r'\1 ', text)
+    
+    return text.strip()
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -1890,6 +2008,79 @@ async def analyze_requirements(request: NLPRequest):
             "success": False,
             "error": str(e)
         })
+
+@app.post("/normalize_text")
+async def normalize_text(request: NLPRequest):
+    """Process text and normalize formatting to handle excessive line breaks"""
+    try:
+        text = request.text
+        if not text:
+            return JSONResponse({
+                "success": False,
+                "error": "No text provided"
+            })
+        
+        # Apply special cleaning for excessive newlines
+        cleaned_text = clean_extracted_text(text)
+        
+        return JSONResponse({
+            "success": True,
+            "text": cleaned_text,
+        })
+    
+    except Exception as e:
+        logger.error(f"Text normalization error: {str(e)}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        })
+
+@app.get("/check_pandoc")
+async def check_pandoc():
+    """Check if Pandoc is installed and provide installation instructions if not"""
+    try:
+        # Check if pandoc is installed
+        if os.name == 'nt':  # Windows
+            process = subprocess.run(["where", "pandoc"], 
+                                    stdout=subprocess.PIPE, 
+                                    stderr=subprocess.PIPE, 
+                                    text=True)
+        else:  # Unix/Linux
+            process = subprocess.run(["which", "pandoc"], 
+                                   stdout=subprocess.PIPE, 
+                                   stderr=subprocess.PIPE, 
+                                   text=True)
+        
+        if process.returncode == 0:
+            # Pandoc is installed, get version
+            version_process = subprocess.run(["pandoc", "--version"], 
+                                           stdout=subprocess.PIPE, 
+                                           text=True)
+            version_info = version_process.stdout.split('\n')[0] if version_process.stdout else "Unknown version"
+            
+            return JSONResponse({
+                "success": True,
+                "installed": True,
+                "version": version_info,
+                "path": process.stdout.strip() if process.stdout else "Unknown path"
+            })
+        else:
+            # Pandoc is not installed
+            return JSONResponse({
+                "success": True,
+                "installed": False,
+                "installation_instructions": {
+                    "windows": "Download and install from https://pandoc.org/installing.html",
+                    "macos": "Run 'brew install pandoc' if you have Homebrew installed",
+                    "linux": "Run 'sudo apt-get install pandoc' on Debian/Ubuntu or 'sudo yum install pandoc' on CentOS/RHEL"
+                }
+            })
+    except Exception as e:
+        logger.error(f"Error checking Pandoc: {str(e)}")
+        return JSONResponse({
+            "success": False,
+            "error": f"Error checking Pandoc installation: {str(e)}"
+        }, status_code=500)
 
 if __name__ == "__main__":
     import uvicorn

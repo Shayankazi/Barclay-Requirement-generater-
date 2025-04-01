@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import asyncio
@@ -11,6 +11,12 @@ import subprocess
 import traceback
 from typing import Dict, List, Set
 from requirement_analyzer import RequirementsAnalyzer
+from datetime import datetime
+from docx import Document
+from docx.shared import Inches
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from io import BytesIO
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -89,45 +95,201 @@ async def download_requirements():
         logger.error(f"Download error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/check_pandoc")
+async def check_pandoc():
+    """Check if Pandoc is installed and provide installation instructions if not"""
+    try:
+        # Check if pandoc is installed
+        if os.name == 'nt':  # Windows
+            process = subprocess.run(["where", "pandoc"], 
+                                    stdout=subprocess.PIPE, 
+                                    stderr=subprocess.PIPE, 
+                                    text=True)
+        else:  # Unix/Linux
+            process = subprocess.run(["which", "pandoc"], 
+                                   stdout=subprocess.PIPE, 
+                                   stderr=subprocess.PIPE, 
+                                   text=True)
+        
+        if process.returncode == 0:
+            # Pandoc is installed, get version
+            version_process = subprocess.run(["pandoc", "--version"], 
+                                           stdout=subprocess.PIPE, 
+                                           text=True)
+            version_info = version_process.stdout.split('\n')[0] if version_process.stdout else "Unknown version"
+            
+            return JSONResponse({
+                "success": True,
+                "installed": True,
+                "version": version_info,
+                "path": process.stdout.strip() if process.stdout else "Unknown path"
+            })
+        else:
+            # Pandoc is not installed
+            return JSONResponse({
+                "success": True,
+                "installed": False,
+                "installation_instructions": {
+                    "windows": "Download and install from https://pandoc.org/installing.html",
+                    "macos": "Run 'brew install pandoc' if you have Homebrew installed",
+                    "linux": "Run 'sudo apt-get install pandoc' on Debian/Ubuntu or 'sudo yum install pandoc' on CentOS/RHEL"
+                }
+            })
+    except Exception as e:
+        logger.error(f"Error checking Pandoc: {str(e)}")
+        return JSONResponse({
+            "success": False,
+            "error": f"Error checking Pandoc installation: {str(e)}"
+        }, status_code=500)
+
 @app.get("/convert_srs")
 async def convert_srs(format: str):
     """Convert SRS to different formats"""
     try:
+        # Check if the system_srs.md file exists
+        if not os.path.exists("system_srs.md"):
+            return JSONResponse({
+                "success": False,
+                "error": "SRS file not found. Please generate SRS document first."
+            }, status_code=404)
+        
+        # Check if pandoc is installed
+        try:
+            # Use the 'which' command on Unix/Linux or 'where' on Windows to check if pandoc is in PATH
+            if os.name == 'nt':  # Windows
+                subprocess.run(["where", "pandoc"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            else:  # Unix/Linux
+                subprocess.run(["which", "pandoc"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except subprocess.CalledProcessError:
+            return JSONResponse({
+                "success": False,
+                "error": "Pandoc is not installed. Please install Pandoc to convert documents."
+            }, status_code=500)
+        
+        # Convert based on the requested format
+        output_file = ""
         if format == "word":
-            subprocess.run(["pandoc", "system_srs.md", "-o", "system_srs.docx"], check=True)
-            return JSONResponse({"success": True})
+            output_file = "system_srs.docx"
+            subprocess.run(["pandoc", "system_srs.md", "-o", output_file], 
+                           check=True, stderr=subprocess.PIPE)
         elif format == "pdf":
-            subprocess.run(["pandoc", "system_srs.md", "-o", "system_srs.pdf"], check=True)
-            return JSONResponse({"success": True})
+            output_file = "system_srs.pdf"
+            try:
+                subprocess.run(["pandoc", "system_srs.md", "-o", output_file], 
+                               check=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+            except subprocess.CalledProcessError as e:
+                error_output = e.stderr.decode('utf-8') if e.stderr else ""
+                
+                # Check if the error is due to missing pdflatex
+                if "pdflatex not found" in error_output:
+                    return JSONResponse({
+                        "success": False,
+                        "error": "PDF generation requires additional software. Please install texlive with: sudo apt-get install texlive-latex-base texlive-fonts-recommended"
+                    }, status_code=500)
+                else:
+                    # Re-raise for the general exception handler
+                    raise e
         else:
-            raise HTTPException(status_code=400, detail="Invalid format")
+            return JSONResponse({
+                "success": False,
+                "error": "Invalid format. Supported formats are 'word' and 'pdf'."
+            }, status_code=400)
+        
+        # Verify the output file was created
+        if not os.path.exists(output_file):
+            return JSONResponse({
+                "success": False,
+                "error": f"Conversion failed. Output file '{output_file}' was not created."
+            }, status_code=500)
+            
+        return JSONResponse({"success": True})
+    except subprocess.CalledProcessError as e:
+        error_message = e.stderr.decode('utf-8') if e.stderr else str(e)
+        logger.error(f"Error during Pandoc conversion: {error_message}")
+        return JSONResponse({
+            "success": False,
+            "error": f"Pandoc conversion error: {error_message}"
+        }, status_code=500)
     except Exception as e:
         logger.error(f"Error converting SRS: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse({
+            "success": False,
+            "error": f"Error converting document: {str(e)}"
+        }, status_code=500)
 
 @app.get("/download_srs")
 async def download_srs(format: str = None):
     """Download SRS in various formats"""
     try:
+        # Default to markdown if no format is specified
         if not format or format == "md":
             if not os.path.exists("system_srs.md"):
-                raise HTTPException(status_code=404, detail="SRS file not found")
+                return JSONResponse({
+                    "success": False,
+                    "error": "SRS file not found. Please generate SRS document first."
+                }, status_code=404)
+            
             return FileResponse(
                 path="system_srs.md",
                 filename="system_srs.md",
                 media_type="text/markdown"
             )
+        
+        # Handle Word format
         elif format == "word":
             if not os.path.exists("system_srs.docx"):
-                raise HTTPException(status_code=404, detail="Word file not found")
-            return FileResponse("system_srs.docx", filename="system_srs.docx")
+                # Check if Markdown file exists to recommend conversion
+                if os.path.exists("system_srs.md"):
+                    return JSONResponse({
+                        "success": False,
+                        "error": "Word file not found. Please convert to Word format first."
+                    }, status_code=404)
+                else:
+                    return JSONResponse({
+                        "success": False,
+                        "error": "SRS document not found. Please generate SRS document first."
+                    }, status_code=404)
+            
+            return FileResponse(
+                path="system_srs.docx",
+                filename="system_srs.docx",
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+        
+        # Handle PDF format
         elif format == "pdf":
             if not os.path.exists("system_srs.pdf"):
-                raise HTTPException(status_code=404, detail="PDF file not found")
-            return FileResponse("system_srs.pdf", filename="system_srs.pdf")
+                # Check if Markdown file exists to recommend conversion
+                if os.path.exists("system_srs.md"):
+                    return JSONResponse({
+                        "success": False,
+                        "error": "PDF file not found. Please convert to PDF format first."
+                    }, status_code=404)
+                else:
+                    return JSONResponse({
+                        "success": False,
+                        "error": "SRS document not found. Please generate SRS document first."
+                    }, status_code=404)
+            
+            return FileResponse(
+                path="system_srs.pdf",
+                filename="system_srs.pdf",
+                media_type="application/pdf"
+            )
+        
+        # Handle unknown format
+        else:
+            return JSONResponse({
+                "success": False,
+                "error": f"Unsupported format: {format}. Supported formats are 'md', 'word', and 'pdf'."
+            }, status_code=400)
+            
     except Exception as e:
         logger.error(f"Download SRS error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse({
+            "success": False,
+            "error": f"Error downloading SRS document: {str(e)}"
+        }, status_code=500)
 
 @app.post("/create_jira_stories")
 async def create_jira_stories():
@@ -190,6 +352,225 @@ async def download_excel():
         return FileResponse("requirements.xlsx", filename="requirements.xlsx")
     except Exception as e:
         logger.error(f"Download Excel error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+def generate_word_document(requirements: list) -> BytesIO:
+    """Generate a formatted Word document from requirements"""
+    doc = Document()
+    
+    title = doc.add_heading('Software Requirements Specification', 0)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    doc.add_paragraph(f'Generated Date: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+    doc.add_paragraph(f'Total Requirements: {len(requirements)}')
+    
+    doc.add_paragraph('Table of Contents', style='Heading 1')
+    doc.add_paragraph('(Update table of contents after opening the document)')
+    
+    req_types = {'FR': 'Functional Requirements',
+                'NFR': 'Non-Functional Requirements',
+                'SR': 'Security Requirements'}
+    
+    for req_type, section_title in req_types.items():
+        type_reqs = [r for r in requirements if r['type'].startswith(req_type)]
+        if type_reqs:
+            doc.add_heading(section_title, level=1)
+            
+            for req in type_reqs:
+                heading = doc.add_heading(level=2)
+                heading.add_run(f"{req['summary']}")
+                
+                table = doc.add_table(rows=1, cols=2)
+                table.style = 'Table Grid'
+                table.autofit = True
+                
+                table.columns[0].width = Inches(2)
+                table.columns[1].width = Inches(4)
+                
+                row_cells = table.rows[0].cells
+                row_cells[0].text = 'Requirement ID'
+                row_cells[1].text = req.get('id', 'N/A')
+                
+                details = [
+                    ('Priority', req.get('priority', 'N/A')),
+                    ('Type', req.get('type', 'N/A')),
+                    ('Description', req.get('description', 'N/A')),
+                ]
+                
+                for label, value in details:
+                    row_cells = table.add_row().cells
+                    row_cells[0].text = label
+                    row_cells[1].text = str(value)
+                
+                doc.add_paragraph()  
+    
+    doc_io = BytesIO()
+    doc.save(doc_io)
+    doc_io.seek(0)
+    return doc_io
+
+@app.get("/download_requirement_docx")
+async def download_requirement_docx():
+    """Download requirements as a formatted Word document"""
+    try:
+        # Check if requirements_cache.json exists
+        if not os.path.exists("requirements_cache.json"):
+            raise HTTPException(status_code=404, detail="Requirements cache not found. Please analyze requirements first.")
+        
+        # Load requirements from cache
+        with open("requirements_cache.json", "r") as f:
+            requirements_data = json.load(f)
+            
+        if not requirements_data or not isinstance(requirements_data, list) or len(requirements_data) == 0:
+            raise HTTPException(status_code=404, detail="No requirements found in cache.")
+            
+        # Generate the Word document
+        doc_io = generate_word_document(requirements_data)
+        
+        # Save it temporarily to disk
+        with open("requirements_document.docx", "wb") as f:
+            f.write(doc_io.getvalue())
+        
+        return FileResponse(
+            path="requirements_document.docx",
+            filename="requirements_document.docx",
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+    except Exception as e:
+        logger.error(f"Error generating Word document: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/generate_srs_docx")
+async def generate_srs_docx(request: Request):
+    """Generate a formatted Word document from raw SRS text"""
+    try:
+        # Get the raw text from the request body
+        body = await request.json()
+        if not body.get("text"):
+            raise HTTPException(status_code=400, detail="No text provided in the request")
+        
+        raw_text = body.get("text")
+        
+        # Generate a Word document
+        doc = Document()
+        
+        # Set document style and formatting
+        styles = doc.styles
+        style_normal = styles['Normal']
+        style_normal.font.name = 'Calibri'
+        style_normal.font.size = 210000  # 10.5 points
+        
+        # Add title with center alignment
+        title = doc.add_heading('Software Requirements Specification', 0)
+        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # Process the raw text line by line for better control
+        lines = raw_text.split('\n')
+        
+        # Extract metadata from the first few lines (title, version, date)
+        metadata_text = []
+        current_line = 0
+        
+        # Process metadata until we hit a section header
+        while current_line < len(lines) and not lines[current_line].startswith('##'):
+            line = lines[current_line].strip()
+            if line and not line.startswith('#'):
+                paragraph = doc.add_paragraph(line)
+                paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            current_line += 1
+        
+        # Add a table of contents
+        doc.add_heading('Table of Contents', level=1)
+        toc_para = doc.add_paragraph()
+        toc_para.add_run('Update table of contents after opening the document')
+        
+        # Process each section
+        section_level = 0
+        in_list = False
+        list_indent_level = 0
+        
+        # Continue processing from where we left off
+        while current_line < len(lines):
+            line = lines[current_line].strip()
+            current_line += 1
+            
+            if not line:
+                continue
+                
+            # Process headings
+            if line.startswith('## '):
+                # Section header (## 1. Purpose)
+                section_name = line[3:].strip()
+                heading = doc.add_heading(section_name, level=1)
+                in_list = False
+            elif line.startswith('### '):
+                # Subsection header
+                subsection_name = line[4:].strip()
+                heading = doc.add_heading(subsection_name, level=2)
+                in_list = False
+            # Process list items
+            elif line.startswith('*'):
+                # First level bullet
+                list_text = line[1:].strip()
+                p = doc.add_paragraph(list_text, style='List Bullet')
+                in_list = True
+                list_indent_level = 1
+            elif line.startswith('    *') or line.startswith('  *'):
+                # Indented bullet
+                list_text = line.lstrip(' *').strip()
+                p = doc.add_paragraph(list_text, style='List Bullet 2')
+                in_list = True
+                list_indent_level = 2
+            # Process bracketed requirement IDs like [FR-001]
+            elif '[' in line and ']' in line and any(req_type in line for req_type in ['FR-', 'NFR-', 'SR-']):
+                # This appears to be a requirement line
+                req_parts = line.split(']', 1)
+                if len(req_parts) > 1:
+                    req_id = req_parts[0].strip() + ']'
+                    req_desc = req_parts[1].strip()
+                    
+                    # Add a small table for the requirement
+                    table = doc.add_table(rows=1, cols=2)
+                    table.style = 'Table Grid'
+                    
+                    # Set column widths
+                    table.columns[0].width = Inches(1.5)
+                    table.columns[1].width = Inches(5)
+                    
+                    # Fill the table
+                    row_cells = table.rows[0].cells
+                    row_cells[0].text = req_id
+                    row_cells[1].text = req_desc
+                    
+                    in_list = False
+            else:
+                # Regular paragraph
+                if in_list and line.startswith(('    ', '  ')):
+                    # This is indented text within a list item
+                    p = doc.add_paragraph(line.strip())
+                    p.style = 'List Continue'
+                    p.paragraph_format.left_indent = 30 * list_indent_level * 12000  # Indent based on level
+                else:
+                    # Regular paragraph
+                    doc.add_paragraph(line)
+                    in_list = False
+        
+        # Save the document to a BytesIO object
+        doc_io = BytesIO()
+        doc.save(doc_io)
+        doc_io.seek(0)
+        
+        # Save temporarily to disk
+        with open("generated_srs.docx", "wb") as f:
+            f.write(doc_io.getvalue())
+        
+        return FileResponse(
+            path="generated_srs.docx",
+            filename="srs_document.docx",
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+    except Exception as e:
+        logger.error(f"Error generating SRS document: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 async def process_analyzer_queue(websocket_id: str):
@@ -382,5 +763,4 @@ async def websocket_endpoint(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 8001))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=8002)
