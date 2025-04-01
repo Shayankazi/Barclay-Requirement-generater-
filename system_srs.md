@@ -1,85 +1,92 @@
 # Software Requirements Specification
-For System Performance & Scalability
+For a notification system using email,
 Version 1.0
 
 April 01, 2025
 
 ## 1. Purpose
 
-The primary goal of this system is to provide a comprehensive platform for healthcare management, streamlining administrative tasks and enhancing patient care. This system aims to improve operational efficiency, reduce costs, and provide a secure and accessible environment for patients and providers. The business value lies in improved patient outcomes, increased revenue through efficient billing, and enhanced compliance with industry regulations.
+The primary goal of the Email Notification System (ENS) is to provide automated, timely, and relevant notifications to patients and staff regarding appointments, prescriptions, and other critical healthcare-related events. The ENS aims to improve patient engagement, reduce no-show rates, enhance communication efficiency, and streamline administrative processes. The business value lies in improved patient outcomes, reduced operational costs, and enhanced overall patient satisfaction.
 
 ## 2. Scope
 
-*   **Included Features:** User registration and management, appointment scheduling, e-prescribing integration, secure payment processing, notification system, reporting and analytics, provider management, patient data management, and a secure patient portal.
-*   **System Boundaries:** The system encompasses all functionalities related to patient and provider management, scheduling, billing, and reporting. It includes integrations with external e-prescribing and payment gateway systems.
-*   **Excluded Features:** Complex medical imaging analysis, advanced AI-driven diagnostics, and direct integration with laboratory equipment are explicitly excluded from the initial scope.
+*   **Included Features:** The ENS will handle appointment reminders, prescription refill reminders, online consultation notifications, account updates, and administrative alerts. It will integrate with the existing Hospital Information System (HIS), Electronic Medical Record (EMR), and Practice Management System (PMS) to retrieve relevant data.
+*   **System Boundaries:** The ENS is limited to sending email notifications. SMS and in-app notifications are explicitly excluded. The system will not handle email marketing campaigns or unsolicited communications.
+*   **Excluded Features:** SMS notifications, in-app notifications, email marketing, direct integration with external calendar applications (e.g., Google Calendar, Outlook Calendar).
 
 ## 3. Stakeholders
 
-*   **Patients:** Access and manage their health information, schedule appointments, and communicate with providers. (Responsibility: Provide accurate information and adhere to system policies.)
-*   **Providers (Doctors, Nurses):** Manage patient records, schedule appointments, prescribe medications, and generate reports. (Responsibility: Maintain accurate patient records and adhere to ethical guidelines.)
-*   **Administrators:** Manage user accounts, configure system settings, generate reports, and ensure system security. (Responsibility: Maintain system integrity and enforce security policies.)
-*   **Billing Department:** Process payments, generate invoices, and manage financial records. (Responsibility: Ensure accurate billing and compliance with financial regulations.)
-*   **IT Department:** Maintain system infrastructure, ensure data security, and provide technical support. (Responsibility: Ensure system availability and data integrity.)
+*   **Patients:** Receive appointment reminders, prescription refill reminders, and consultation notifications. Responsible for maintaining accurate contact information.
+*   **Doctors:** Receive notifications regarding appointment bookings, cancellations, and consultation requests. Responsible for managing their schedules and prescription information.
+*   **Nurses:** Receive notifications related to patient care coordination and administrative tasks. Responsible for patient follow-up and communication.
+*   **Administrators:** Oversee the ENS configuration, monitor performance, and manage user accounts. Responsible for ensuring system compliance and security.
+*   **IT Staff:** Responsible for maintaining the ENS infrastructure, troubleshooting issues, and implementing updates. Responsible for system security and data integrity.
 
 ## 4. Features
 
-*   **User Management:** Secure registration, profile management, and role-based access control.
-*   **Appointment Scheduling:** Calendar-based scheduling with booking, rescheduling, cancellation, and automated reminders.
-*   **E-Prescribing:** Integration with e-prescribing systems for electronic prescription management.
-*   **Payment Processing:** Secure payment gateway integration for online payment processing.
-*   **Notifications:** Customizable notification system with support for email, SMS, and in-app notifications.
-*   **Reporting & Analytics:** Customizable dashboards and data visualization tools for generating reports and analytics.
-*   **Provider Management:** Provider registration, profile management, and license verification.
-*   **Patient Data Management:** Secure storage and retrieval of patient demographics, medical history, and insurance information.
-*   **Patient Portal:** Secure online portal for patients to view and update their information.
+*   **Automated Email Notifications:** Sends pre-defined email notifications based on triggers within the HIS/EMR/PMS.
+*   **Customizable Templates:** Allows administrators to customize email templates with branding and relevant information.
+*   **User Preference Management:** Enables patients to manage their notification preferences (e.g., frequency, types of notifications).
+*   **Delivery Status Tracking:** Provides administrators with reports on email delivery status (e.g., sent, delivered, bounced).
+*   **Integration with HIS/EMR/PMS:** Seamlessly integrates with existing systems to retrieve and update patient and appointment data.
 
-## 5. Functional Requirements Section
+## 5. Functional Requirements
 
-*   [FR-001]: The system shall provide capabilities for data processing, scheduling, and reporting. [High] (Source: Explicit)
-*   [FR-002]: The system shall provide integration capabilities with other systems. [Medium] (Source: Explicit)
-*   [FR-003]: The system shall implement user registration workflows, profile management features, and granular access controls based on roles (patient, family member, etc.). [High] (Source: Gap - Users Management)
-*   [FR-004]: The system shall implement a calendar-based appointment system with features for booking, rescheduling, cancellation, and automated reminders. [High] (Source: Gap - Appointment System)
-*   [FR-005]: The system shall integrate with e-prescribing systems and ensure compliance with relevant regulations. [High] (Source: Gap - Prescription Management)
-*   [FR-006]: The system shall integrate with secure payment gateways and ensure compliance with PCI DSS. [High] (Source: Gap - Payment Processing)
-*   [FR-007]: The system shall implement a notification system with support for various channels (email, SMS, in-app) and customizable notification settings. [Medium] (Source: Gap - Notifications)
-*   [FR-008]: The system shall implement reporting and analytics features with customizable dashboards and data visualization tools. [Medium] (Source: Gap - Reporting & Analytics)
-*   [FR-009]: The system shall implement provider registration workflows, profile management features, and integration with relevant databases for license verification. [High] (Source: Gap - Doctor/Provider Management)
-*   [FR-010]: The system shall capture and manage basic patient demographics, medical history, and insurance information. [High] (Source: Clarification - Patient Management)
-*   [FR-011]: The system shall provide a secure patient portal for viewing and updating limited information. [High] (Source: Clarification - Patient Management)
-*   [FR-012]: The system shall manage provider schedules and availability with an integrated scheduling system and real-time availability updates. [High] (Source: Clarification - Doctor/Provider Management)
-*   [FR-013]: The system shall track and manage provider basic contact information and specialty. [Medium] (Source: Clarification - Doctor/Provider Management)
+*   [FR-1]: The system shall send appointment reminders to patients 24 hours before their scheduled appointment. [High] (Source: F10)
+*   [FR-2]: The system shall send prescription refill reminders to patients 7 days before their prescription expires. [Medium] (Source: F10)
+*   [FR-3]: The system shall notify doctors of new appointment bookings. [High] (Source: F2)
+*   [FR-4]: The system shall notify doctors when a patient cancels an appointment. [High] (Source: F2)
+*   [FR-5]: The system shall notify patients when a doctor schedules an online consultation. [High] (Source: F4)
+*   [FR-6]: The system shall allow administrators to customize email templates. [Medium] (Source: F5)
+*   [FR-7]: The system shall allow patients to opt-out of specific email notifications. [Medium] (Source: F7)
+*   [FR-8]: The system shall track the delivery status of each email notification. [Medium] (Source: F5)
+*   [FR-9]: The system shall integrate with the HIS, EMR, and PMS to retrieve patient and appointment data. [High] (Source: HIS, EMR, and PACS)
+*   [FR-10]: The system shall send a confirmation email to patients upon successful appointment booking. [High] (Source: F1)
 
-## 6. Non-Functional Requirements Section
+## 6. Non-Functional Requirements
 
-*   [NFR-001]: The system shall demonstrate robust performance, with response times for common operations (e.g., login, data retrieval) not exceeding 3 seconds under normal load. [High]
-*   [NFR-002]: The system shall be scalable to accommodate a 50% increase in users and data volume within the next 2 years without significant performance degradation. [High]
-*   [NFR-003]: The system shall maintain optimal performance under high user concurrency (up to 100 concurrent users) and data volume conditions. [High]
-*   [NFR-004]: The design shall accommodate future scalability, feature extensions, and evolving business needs through a modular and extensible architecture. [High]
-*   [NFR-005]: The system shall be user-friendly and accessible, adhering to WCAG 2.1 Level AA accessibility guidelines. [Medium]
+*   [NFR-1]: The system shall send email notifications within 5 minutes of the triggering event. [High]
+*   [NFR-2]: The system shall have an email delivery success rate of 99%. [High]
+*   [NFR-3]: The system shall be available 24/7 with a 99.9% uptime. [High]
+*   [NFR-4]: The system shall be scalable to handle a 10% increase in patient volume over the next 3 years. [Medium]
+*   [NFR-5]: The system shall support Windows, macOS, and Linux operating systems for administrative access. [Medium]
+*   [NFR-6]: The system shall provide user manuals and API documentation. [Medium]
+*   [NFR-7]: The system shall integrate with existing HIS, EMR, and PACS systems. [High]
 
-## 7. Security Requirements Section
+## 7. Security Requirements
 
-*   [SR-001]: The system shall ensure data security by implementing industry-standard encryption for data at rest and in transit. [High]
-*   [SR-002]: The system shall comply with industry standards such as HIPAA for patient data privacy and security. [High]
-*   [SR-003]: The system shall comply with industry-specific regulations related to e-prescribing and payment processing. [High]
-*   [SR-004]: The system shall implement granular access controls based on user roles to restrict access to sensitive data. [High]
-*   [SR-005]: The system shall undergo regular security audits and penetration testing to identify and address vulnerabilities. [High]
+*   [SR-1]: The system shall encrypt patient data at rest and in transit using 256-bit AES encryption. [High]
+*   [SR-2]: The system shall comply with HIPAA, GDPR, and CCPA regulations. [High]
+*   [SR-3]: The system shall implement access controls to restrict access to patient data based on user roles. [High]
+*   [SR-4]: The system shall maintain an audit trail of all system activities. [Medium]
+*   [SR-5]: The system shall protect against unauthorized access and data breaches. [High]
 
-## 8. Constraints Section
+## 8. Constraints
 
-*   **Technical Limitations:** The system must be compatible with existing infrastructure and integrate with specified third-party APIs.
-*   **Business Rules:** All patient data must be handled in accordance with HIPAA regulations. Appointment scheduling must adhere to provider availability.
-*   **Regulatory Requirements:** The system must comply with all applicable federal, state, and local regulations related to healthcare data privacy and security.
-*   **Budgetary Constraints:** The total development cost must not exceed the allocated budget.
+*   **Technical Limitations:** The system is limited by the capabilities of the existing HIS/EMR/PMS systems.
+*   **Business Rules:** Patients can only cancel or reschedule appointments online up to 24 hours before the scheduled time. (Source: F11)
+*   **Regulatory Requirements:** The system must comply with all applicable healthcare regulations, including HIPAA, GDPR, and CCPA. (Source: HIPAA, GDPR, and CCPA)
+*   **Budgetary Constraints:** The project budget is limited to [Insert Budget Amount].
+*   **Time Constraints:** The system must be implemented within [Insert Timeframe].
 
 ## 9. Priorities Section (MoSCoW)
 
-*   **Must Have:** User registration, appointment scheduling, patient data management, data security, HIPAA compliance, e-prescribing integration, secure payment processing.
-*   **Should Have:** Notification system, reporting and analytics, provider management, patient portal.
-*   **Could Have:** Advanced reporting features, integration with wearable devices.
-*   **Won't Have:** Complex medical imaging analysis, AI-driven diagnostics in the initial release.
+*   **Must Have:**
+    *   Automated appointment reminders
+    *   Secure data transmission
+    *   Integration with HIS/EMR/PMS
+    *   Compliance with HIPAA regulations
+*   **Should Have:**
+    *   Prescription refill reminders
+    *   Customizable email templates
+    *   User preference management
+*   **Could Have:**
+    *   Delivery status tracking
+*   **Won't Have:**
+    *   SMS notifications
+    *   In-app notifications
+    *   Direct calendar integration
 
 ## 10. Additional Section
 
-The system should be designed with future integration capabilities in mind, allowing for seamless integration with emerging healthcare technologies. Consideration should be given to incorporating telehealth functionalities in future releases. The system should also be designed to support multiple languages to accommodate a diverse patient population.
+The ENS should be designed with human-centered design principles to ensure ease of use and accessibility. Future considerations include integrating with telemedicine platforms and expanding notification channels to include SMS and in-app notifications. The system should be designed to accommodate future integrations with other hospital systems.
