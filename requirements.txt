@@ -1,9 +1,3 @@
-<<<<<<< HEAD
-google-generative-ai==0.3.1
-python-dotenv==1.0.0
-markdown2==2.4.10
-tkinter
-=======
 google-generativeai==0.3.2
 python-dotenv==1.0.1
 sentence-transformers==2.5.1
@@ -17,4 +11,9 @@ pandas
 jira
 python-multipart
 xlsxwriter
->>>>>>> f3314de (SRS)
+markdown2==2.4.10
+# OCR and text extraction dependencies
+Pillow
+pytesseract
+PyPDF2
+beautifulsoup4

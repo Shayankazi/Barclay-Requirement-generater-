@@ -87,6 +87,96 @@
             background-color: #cccccc;
             cursor: not-allowed;
         }
+        /* OCR Box Styles */
+        #ocrBox {
+            margin-top: 30px;
+            border: 2px dashed #aaa;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            background-color: #f8f9fa;
+            transition: all 0.3s;
+        }
+        #ocrBox.highlight {
+            border-color: #4CAF50;
+            background-color: #e8f5e9;
+        }
+        #ocrBox h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        #ocrBox p {
+            color: #666;
+            margin-bottom: 20px;
+        }
+        #ocrBox i {
+            font-size: 48px;
+            color: #aaa;
+            margin-bottom: 15px;
+            display: block;
+        }
+        #ocrFileInput {
+            display: none;
+        }
+        #ocrResult {
+            margin-top: 20px;
+            display: none;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        #ocrBtns {
+            margin-top: 15px;
+        }
+        .file-type-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            margin: 3px;
+            border-radius: 12px;
+            font-size: 12px;
+            background-color: #e0e0e0;
+            color: #333;
+        }
+        /* Text comparison tabs */
+        .tab-container {
+            width: 100%;
+            margin-top: 20px;
+        }
+        .tab-header {
+            display: flex;
+            border-bottom: 1px solid #ddd;
+        }
+        .tab-btn {
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: #f1f1f1;
+            border: none;
+            outline: none;
+            border-radius: 5px 5px 0 0;
+            margin-right: 2px;
+        }
+        .tab-btn.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .tab-content {
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+            background-color: #fafafa;
+        }
+        pre.tab-text {
+            white-space: pre-wrap;
+            padding: 10px;
+            background-color: white;
+            border: 1px solid #eee;
+            max-height: 300px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body>
@@ -116,6 +206,26 @@
             <button id="jiraBtn" class="btn">Process in Jira</button>
             <button id="excelBtn" class="btn" style="display: none;">Download Excel</button>
         </div>
+    </div>
+
+    <!-- OCR Requirement Generator Box -->
+    <div id="ocrBox">
+        <h3>OCR Requirement Generator</h3>
+        <p>Drag & drop files or click to extract requirements from documents</p>
+        <i>📄</i>
+        <div>
+            <span class="file-type-badge">PDF</span>
+            <span class="file-type-badge">Word</span>
+            <span class="file-type-badge">Images</span>
+            <span class="file-type-badge">Web Page</span>
+        </div>
+        <input type="file" id="ocrFileInput" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.txt,.html">
+        <div id="ocrBtns">
+            <button onclick="document.getElementById('ocrFileInput').click()">Select File</button>
+            <button id="micBtn" style="background-color: #9c27b0;">Speech Recognition</button>
+            <button id="urlBtn" style="background-color: #2196F3;">Extract from URL</button>
+        </div>
+        <div id="ocrResult"></div>
     </div>
 
     <div id="output"></div>
@@ -253,42 +363,23 @@
                     });
             });
             
-            document.getElementById('jiraBtn').addEventListener('click', function() {
-                this.disabled = true;
-                this.textContent = 'Processing...';
-
-                // Add a div for Jira output if it doesn't exist
-                let jiraOutput = document.getElementById('jiraOutput');
-                if (!jiraOutput) {
-                    jiraOutput = document.createElement('div');
-                    jiraOutput.id = 'jiraOutput';
-                    jiraOutput.style.marginTop = '10px';
-                    jiraOutput.style.whiteSpace = 'pre-wrap';
-                    document.getElementById('extraFormats').appendChild(jiraOutput);
-                }
-                
-                fetch('/create_jira_stories', {
-                    method: 'POST'
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if(data.success) {
-                        this.textContent = 'Processed in Jira';
-                        document.getElementById('excelBtn').style.display = 'inline-block';
-                        // Show the output in the jiraOutput div
-                        jiraOutput.textContent = data.output || 'Jira stories created successfully!';
-                    } else {
-                        this.textContent = 'Error Processing';
-                        this.disabled = false;
-                        // Show error details
-                        jiraOutput.textContent = `Error: ${data.error}\n\n${data.traceback || ''}`;
-                    }
-                })
-                .catch(error => {
-                    this.textContent = 'Error Processing';
-                    this.disabled = false;
-                    jiraOutput.textContent = `Error: ${error.message}`;
-                });
+            document.getElementById('jiraBtn').addEventListener('click', () => {
+                document.getElementById('jiraBtn').disabled = true;
+                fetch('/create_jira_stories', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        if(data.success) {
+                            alert('Successfully created JIRA stories!');
+                            document.getElementById('excelBtn').style.display = 'inline-block';
+                        } else {
+                            alert('Error: ' + data.error);
+                        }
+                        document.getElementById('jiraBtn').disabled = false;
+                    })
+                    .catch(err => {
+                        alert('Error: ' + err);
+                        document.getElementById('jiraBtn').disabled = false;
+                    });
             });
             
             document.getElementById('excelBtn').addEventListener('click', () => {
@@ -305,6 +396,302 @@
 
         // Initial connection
         connect();
+
+        // OCR Requirement Generator functionality
+        const ocrBox = document.getElementById('ocrBox');
+        const ocrFileInput = document.getElementById('ocrFileInput');
+        const ocrResult = document.getElementById('ocrResult');
+        const micBtn = document.getElementById('micBtn');
+        const urlBtn = document.getElementById('urlBtn');
+        
+        // Drag and drop functionality
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            ocrBox.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+            ocrBox.addEventListener(eventName, highlight, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            ocrBox.addEventListener(eventName, unhighlight, false);
+        });
+        
+        function highlight() {
+            ocrBox.classList.add('highlight');
+        }
+        
+        function unhighlight() {
+            ocrBox.classList.remove('highlight');
+        }
+        
+        ocrBox.addEventListener('drop', handleDrop, false);
+        
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files.length) {
+                handleFiles(files);
+            } else if (dt.getData('text/html') || dt.getData('text/plain')) {
+                // Handle dropped text or HTML
+                let content = dt.getData('text/html') || dt.getData('text/plain');
+                processContent(content, 'text');
+            }
+        }
+        
+        // File input change handler
+        ocrFileInput.addEventListener('change', function() {
+            if (this.files.length) {
+                handleFiles(this.files);
+            }
+        });
+        
+        function handleFiles(files) {
+            const file = files[0]; // Process only the first file for simplicity
+            
+            // Show loading state
+            ocrResult.innerHTML = '<p>Processing file...</p>';
+            ocrResult.style.display = 'block';
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            fetch('/extract_text', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    processExtractedText(data.text, file.name, data.analyzed_text);
+                } else {
+                    ocrResult.innerHTML = `<p>Error: ${data.error}</p>`;
+                }
+            })
+            .catch(error => {
+                ocrResult.innerHTML = `<p>Error: ${error.message}</p>`;
+                console.error('Error:', error);
+            });
+        }
+        
+        function processContent(content, type) {
+            ocrResult.innerHTML = '<p>Processing content...</p>';
+            ocrResult.style.display = 'block';
+            
+            fetch('/process_content', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ content, type })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    processExtractedText(data.text, 'Content', data.analyzed_text);
+                } else {
+                    ocrResult.innerHTML = `<p>Error: ${data.error}</p>`;
+                }
+            })
+            .catch(error => {
+                ocrResult.innerHTML = `<p>Error: ${error.message}</p>`;
+                console.error('Error:', error);
+            });
+        }
+        
+        function processExtractedText(text, source, analyzedText = null) {
+            // Create the tab container
+            let tabContent = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h4 style="margin: 0;">Extracted from: ${source}</h4>
+                    <div>
+                        <button onclick="useExtractedText('original')" style="background-color: #ff9800;">Use Original Text</button>
+                        <button onclick="useExtractedText('analyzed')" style="background-color: #2196F3;">Use Analyzed Requirements</button>
+                    </div>
+                </div>
+                <div class="tab-container">
+                    <div class="tab-header">
+                        <button class="tab-btn active" onclick="switchTab(this, 'original-tab')">Original Text</button>
+                        <button class="tab-btn" onclick="switchTab(this, 'analyzed-tab')">Analyzed Requirements</button>
+                    </div>
+                    <div class="tab-content">
+                        <div id="original-tab" style="display: block;">
+                            <pre class="tab-text">${text}</pre>
+                        </div>
+                        <div id="analyzed-tab" style="display: none;">
+                            <pre class="tab-text">${analyzedText || 'Analysis loading...'}</pre>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            ocrResult.innerHTML = tabContent;
+            
+            // Store both the extracted text and analyzed requirements for later use
+            window.extractedText = text;
+            window.analyzedText = analyzedText;
+            
+            // If analyzedText is not provided, attempt to get it
+            if (!analyzedText && text) {
+                fetch('/analyze_requirements', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text: text })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Update the analyzed tab with the response
+                        document.querySelector('#analyzed-tab pre').textContent = data.analyzed_text;
+                        window.analyzedText = data.analyzed_text;
+                    } else {
+                        document.querySelector('#analyzed-tab pre').textContent = 'Analysis failed: ' + data.error;
+                    }
+                })
+                .catch(error => {
+                    document.querySelector('#analyzed-tab pre').textContent = 'Error performing analysis: ' + error.message;
+                });
+            }
+        }
+        
+        function switchTab(button, tabId) {
+            // Update button states
+            const tabButtons = document.querySelectorAll('.tab-btn');
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            
+            // Hide all tab contents and show the selected one
+            const tabContents = document.querySelectorAll('.tab-content > div');
+            tabContents.forEach(tab => tab.style.display = 'none');
+            document.getElementById(tabId).style.display = 'block';
+        }
+        
+        function useExtractedText(type = 'original') {
+            const textToUse = type === 'original' ? window.extractedText : window.analyzedText;
+            if (textToUse) {
+                document.getElementById('description').value = textToUse;
+                alert(`${type.charAt(0).toUpperCase() + type.slice(1)} text has been added to the requirements input!`);
+            }
+        }
+        
+        // Speech recognition
+        micBtn.addEventListener('click', startSpeechRecognition);
+        
+        function startSpeechRecognition() {
+            if (!('webkitSpeechRecognition' in window)) {
+                alert('Your browser does not support speech recognition. Please try Chrome.');
+                return;
+            }
+            
+            const recognition = new webkitSpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+            
+            let finalTranscript = '';
+            
+            recognition.onstart = function() {
+                micBtn.style.backgroundColor = '#f44336';
+                micBtn.textContent = 'Listening... (Click to Stop)';
+                micBtn.onclick = function() {
+                    recognition.stop();
+                };
+                
+                ocrResult.innerHTML = '<p>Listening... speak clearly into your microphone.</p>';
+                ocrResult.style.display = 'block';
+            };
+            
+            recognition.onresult = function(event) {
+                let interimTranscript = '';
+                
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript;
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+                
+                ocrResult.innerHTML = `
+                    <p>Transcribing...</p>
+                    <div style="font-weight: bold;">${finalTranscript}</div>
+                    <div style="color: gray; font-style: italic;">${interimTranscript}</div>
+                `;
+            };
+            
+            recognition.onerror = function(event) {
+                ocrResult.innerHTML = `<p>Error: ${event.error}</p>`;
+                resetMicButton();
+            };
+            
+            recognition.onend = function() {
+                resetMicButton();
+                
+                if (finalTranscript) {
+                    processExtractedText(finalTranscript, 'Speech Recognition');
+                } else {
+                    ocrResult.innerHTML = '<p>No speech was detected. Please try again.</p>';
+                }
+            };
+            
+            recognition.start();
+        }
+        
+        function resetMicButton() {
+            micBtn.style.backgroundColor = '#9c27b0';
+            micBtn.textContent = 'Speech Recognition';
+            micBtn.onclick = startSpeechRecognition;
+        }
+        
+        // URL extraction
+        urlBtn.addEventListener('click', function() {
+            const url = prompt('Enter URL to extract content from:');
+            if (url) {
+                ocrResult.innerHTML = '<p>Extracting content from URL...</p>';
+                ocrResult.style.display = 'block';
+                
+                fetch('/extract_from_url', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        processExtractedText(data.text, url, data.analyzed_text);
+                    } else {
+                        ocrResult.innerHTML = `<p>Error: ${data.error}</p>`;
+                    }
+                })
+                .catch(error => {
+                    ocrResult.innerHTML = `<p>Error: ${error.message}</p>`;
+                });
+            }
+        });
     </script>
 </body>
 </html>

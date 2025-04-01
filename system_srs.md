@@ -1,89 +1,85 @@
 # Software Requirements Specification
-For [Functional] The system should maintain
+For System Performance & Scalability
 Version 1.0
 
 April 01, 2025
 
-```markdown
 ## 1. Purpose
 
-This document specifies the requirements for a comprehensive Hospital Management System (HMS). The primary goal of the HMS is to streamline hospital operations, improve patient care, and enhance administrative efficiency. The business value lies in reduced operational costs, improved patient satisfaction, and better data-driven decision-making.
+The primary goal of this system is to provide a comprehensive platform for healthcare management, streamlining administrative tasks and enhancing patient care. This system aims to improve operational efficiency, reduce costs, and provide a secure and accessible environment for patients and providers. The business value lies in improved patient outcomes, increased revenue through efficient billing, and enhanced compliance with industry regulations.
 
 ## 2. Scope
 
-*   **Included Features:** Appointment management, schedule management, patient records management, online consultations, insurance integration, user management, e-prescribing, payment processing, automated notifications, reporting and analytics.
-*   **System Boundaries:** The system encompasses all aspects of patient care, administrative tasks, and financial operations within the hospital. It interacts with external insurance providers and e-prescribing platforms.
-*   **Excluded Features:** Inventory management of medical supplies, advanced medical imaging analysis, and integration with external research databases are explicitly excluded from the initial scope.
+*   **Included Features:** User registration and management, appointment scheduling, e-prescribing integration, secure payment processing, notification system, reporting and analytics, provider management, patient data management, and a secure patient portal.
+*   **System Boundaries:** The system encompasses all functionalities related to patient and provider management, scheduling, billing, and reporting. It includes integrations with external e-prescribing and payment gateway systems.
+*   **Excluded Features:** Complex medical imaging analysis, advanced AI-driven diagnostics, and direct integration with laboratory equipment are explicitly excluded from the initial scope.
 
 ## 3. Stakeholders
 
-*   **Patients:** Book appointments, access medical records, participate in online consultations. (Responsibility: Provide accurate information).
-*   **Doctors:** Manage schedules, conduct consultations, prescribe medications, access patient records. (Responsibility: Provide quality care and maintain accurate records).
-*   **Administrators:** Oversee hospital operations, manage user accounts, generate reports, configure system settings. (Responsibility: Ensure efficient and secure system operation).
-*   **Insurance Providers:** Verify insurance information, process claims. (Responsibility: Provide timely and accurate claim processing).
+*   **Patients:** Access and manage their health information, schedule appointments, and communicate with providers. (Responsibility: Provide accurate information and adhere to system policies.)
+*   **Providers (Doctors, Nurses):** Manage patient records, schedule appointments, prescribe medications, and generate reports. (Responsibility: Maintain accurate patient records and adhere to ethical guidelines.)
+*   **Administrators:** Manage user accounts, configure system settings, generate reports, and ensure system security. (Responsibility: Maintain system integrity and enforce security policies.)
+*   **Billing Department:** Process payments, generate invoices, and manage financial records. (Responsibility: Ensure accurate billing and compliance with financial regulations.)
+*   **IT Department:** Maintain system infrastructure, ensure data security, and provide technical support. (Responsibility: Ensure system availability and data integrity.)
 
 ## 4. Features
 
-*   **Appointment Management:** Allows patients to book, reschedule, and cancel appointments.
-*   **Schedule Management:** Enables doctors to manage their availability and appointment schedules.
-*   **Patient Records Management:** Securely stores and manages patient medical history, demographics, and other relevant information.
-*   **Online Consultations:** Facilitates virtual consultations between patients and doctors.
-*   **Insurance Integration:** Integrates with insurance providers for eligibility verification and claims processing.
-*   **User Management:** Provides secure user registration, login, and role-based access control.
-*   **E-Prescribing:** Enables doctors to electronically prescribe medications.
-*   **Payment Processing:** Securely processes patient payments for services rendered.
-*   **Automated Notifications:** Sends automated reminders and notifications to patients and doctors.
-*   **Reporting and Analytics:** Generates reports and provides analytics on key hospital metrics.
+*   **User Management:** Secure registration, profile management, and role-based access control.
+*   **Appointment Scheduling:** Calendar-based scheduling with booking, rescheduling, cancellation, and automated reminders.
+*   **E-Prescribing:** Integration with e-prescribing systems for electronic prescription management.
+*   **Payment Processing:** Secure payment gateway integration for online payment processing.
+*   **Notifications:** Customizable notification system with support for email, SMS, and in-app notifications.
+*   **Reporting & Analytics:** Customizable dashboards and data visualization tools for generating reports and analytics.
+*   **Provider Management:** Provider registration, profile management, and license verification.
+*   **Patient Data Management:** Secure storage and retrieval of patient demographics, medical history, and insurance information.
+*   **Patient Portal:** Secure online portal for patients to view and update their information.
 
 ## 5. Functional Requirements Section
 
-*   [FR-1]: Patients can book appointments. [High] (Source: F1)
-*   [FR-2]: Doctors can manage schedules. [High] (Source: F2)
-*   [FR-3]: Administrators can oversee hospital operations. [High] (Source: F3)
-*   [FR-4]: The system should maintain patient records. [High] (Source: F4)
-*   [FR-5]: The system should support online consultations. [High] (Source: F5)
-*   [FR-6]: The system should integrate with insurance providers. [Medium] (Source: F6)
-*   [FR-7]: The system should implement a robust user management system with registration, login, profile management, and RBAC based on user roles (patient, doctor, administrator). [High] (Source: F7)
-*   [FR-8]: The system should support video consultations with defined quality requirements, recording and screen sharing capabilities, a virtual waiting room, and HIPAA compliance. [High] (Source: F8)
-*   [FR-9]: The system should integrate with an e-prescribing platform and comply with relevant regulations. [Medium] (Source: F9)
-*   [FR-10]: The system should implement secure data storage and retrieval mechanisms, define access control policies, and adopt FHIR for interoperability. [High] (Source: F10)
-*   [FR-11]: The system should integrate with a secure payment gateway and ensure compliance with PCI DSS. [Medium] (Source: F11)
-*   [FR-12]: The system should implement an automated notification system for appointment reminders, medication refills, and other relevant events. [Medium] (Source: F12)
-*   [FR-13]: Patients can cancel appointments up to 24 hours before the scheduled time with no penalty. [Medium] (Source: F13)
-*   [FR-14]: Emergency appointments are accommodated by rescheduling existing appointments based on urgency. [High] (Source: F14)
-*   [FR-15]: The system should implement robust security measures, including data encryption, access control, audit trails, and regular security assessments. [High] (Source: F15)
-*   [FR-16]: The system should provide reporting and analytics features to track relevant metrics (e.g. patient demographics, appointment volumes, revenue) and generate customized reports. [Medium] (Source: F16)
+*   [FR-001]: The system shall provide capabilities for data processing, scheduling, and reporting. [High] (Source: Explicit)
+*   [FR-002]: The system shall provide integration capabilities with other systems. [Medium] (Source: Explicit)
+*   [FR-003]: The system shall implement user registration workflows, profile management features, and granular access controls based on roles (patient, family member, etc.). [High] (Source: Gap - Users Management)
+*   [FR-004]: The system shall implement a calendar-based appointment system with features for booking, rescheduling, cancellation, and automated reminders. [High] (Source: Gap - Appointment System)
+*   [FR-005]: The system shall integrate with e-prescribing systems and ensure compliance with relevant regulations. [High] (Source: Gap - Prescription Management)
+*   [FR-006]: The system shall integrate with secure payment gateways and ensure compliance with PCI DSS. [High] (Source: Gap - Payment Processing)
+*   [FR-007]: The system shall implement a notification system with support for various channels (email, SMS, in-app) and customizable notification settings. [Medium] (Source: Gap - Notifications)
+*   [FR-008]: The system shall implement reporting and analytics features with customizable dashboards and data visualization tools. [Medium] (Source: Gap - Reporting & Analytics)
+*   [FR-009]: The system shall implement provider registration workflows, profile management features, and integration with relevant databases for license verification. [High] (Source: Gap - Doctor/Provider Management)
+*   [FR-010]: The system shall capture and manage basic patient demographics, medical history, and insurance information. [High] (Source: Clarification - Patient Management)
+*   [FR-011]: The system shall provide a secure patient portal for viewing and updating limited information. [High] (Source: Clarification - Patient Management)
+*   [FR-012]: The system shall manage provider schedules and availability with an integrated scheduling system and real-time availability updates. [High] (Source: Clarification - Doctor/Provider Management)
+*   [FR-013]: The system shall track and manage provider basic contact information and specialty. [Medium] (Source: Clarification - Doctor/Provider Management)
 
 ## 6. Non-Functional Requirements Section
 
-*   [NFR-1]: The system should load patient records in less than 1 second. [High]
-*   [NFR-2]: The system should be able to handle a 25% growth in the number of patients and doctors over the next 3 years. [Medium]
-*   [NFR-3]: The system should have less than 1 hour of downtime per month. [High]
-*   [NFR-4]: The system should have 99.5% uptime. [High]
-*   [NFR-5]: Patient data should be encrypted using RSA-2048 encryption. [High]
+*   [NFR-001]: The system shall demonstrate robust performance, with response times for common operations (e.g., login, data retrieval) not exceeding 3 seconds under normal load. [High]
+*   [NFR-002]: The system shall be scalable to accommodate a 50% increase in users and data volume within the next 2 years without significant performance degradation. [High]
+*   [NFR-003]: The system shall maintain optimal performance under high user concurrency (up to 100 concurrent users) and data volume conditions. [High]
+*   [NFR-004]: The design shall accommodate future scalability, feature extensions, and evolving business needs through a modular and extensible architecture. [High]
+*   [NFR-005]: The system shall be user-friendly and accessible, adhering to WCAG 2.1 Level AA accessibility guidelines. [Medium]
 
 ## 7. Security Requirements Section
 
-*   [SR-1]: All patient data must be encrypted at rest and in transit. [High]
-*   [SR-2]: Access to patient records must be restricted based on user roles and permissions. [High]
-*   [SR-3]: The system must comply with all relevant data privacy regulations, including HIPAA. [High]
-*   [SR-4]: Regular security audits and vulnerability assessments must be conducted. [High]
-*   [SR-5]: The system must maintain audit trails of all user activity. [High]
+*   [SR-001]: The system shall ensure data security by implementing industry-standard encryption for data at rest and in transit. [High]
+*   [SR-002]: The system shall comply with industry standards such as HIPAA for patient data privacy and security. [High]
+*   [SR-003]: The system shall comply with industry-specific regulations related to e-prescribing and payment processing. [High]
+*   [SR-004]: The system shall implement granular access controls based on user roles to restrict access to sensitive data. [High]
+*   [SR-005]: The system shall undergo regular security audits and penetration testing to identify and address vulnerabilities. [High]
 
 ## 8. Constraints Section
 
-*   **Technical Limitations:** The system must be compatible with existing hospital infrastructure.
-*   **Business Rules:** Patients can only cancel appointments up to 24 hours before the scheduled time without penalty. Emergency cases require immediate attention and may necessitate rescheduling existing appointments.
-*   **Regulatory Requirements:** The system must comply with HIPAA, PCI DSS, and other relevant regulations. The system must adhere to FHIR standards for data interoperability.
+*   **Technical Limitations:** The system must be compatible with existing infrastructure and integrate with specified third-party APIs.
+*   **Business Rules:** All patient data must be handled in accordance with HIPAA regulations. Appointment scheduling must adhere to provider availability.
+*   **Regulatory Requirements:** The system must comply with all applicable federal, state, and local regulations related to healthcare data privacy and security.
+*   **Budgetary Constraints:** The total development cost must not exceed the allocated budget.
 
 ## 9. Priorities Section (MoSCoW)
 
-*   **Must Have:** Appointment booking, patient record management, user authentication, security, HIPAA compliance.
-*   **Should Have:** Online consultations, insurance integration, e-prescribing, automated notifications, reporting and analytics.
+*   **Must Have:** User registration, appointment scheduling, patient data management, data security, HIPAA compliance, e-prescribing integration, secure payment processing.
+*   **Should Have:** Notification system, reporting and analytics, provider management, patient portal.
 *   **Could Have:** Advanced reporting features, integration with wearable devices.
-*   **Won't Have:** Inventory management of medical supplies, advanced medical imaging analysis.
+*   **Won't Have:** Complex medical imaging analysis, AI-driven diagnostics in the initial release.
 
 ## 10. Additional Section
 
-The system should be designed with scalability in mind to accommodate future growth and evolving needs. Future considerations include integration with telehealth platforms and expansion of reporting capabilities. The system should be designed to be modular to allow for future expansion and integration with other systems.
-```
+The system should be designed with future integration capabilities in mind, allowing for seamless integration with emerging healthcare technologies. Consideration should be given to incorporating telehealth functionalities in future releases. The system should also be designed to support multiple languages to accommodate a diverse patient population.

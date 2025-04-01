@@ -1,4 +1,6 @@
-from fastapi import FastAPI, UploadFile, HTTPException
+from fastapi import FastAPI, UploadFile, HTTPException, WebSocket, WebSocketDisconnect, File
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, validator
 import requests
 import os
@@ -10,7 +12,7 @@ import json
 import traceback
 from fastapi.responses import JSONResponse, StreamingResponse
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Dict, List, Set
 from docx import Document
 from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -20,20 +22,43 @@ import zipfile
 import re
 import logging
 import time
+import asyncio
+import threading
+import subprocess
+
+# Import the RequirementsAnalyzer and NLP
+try:
+    from requirement_analyzer import RequirementsAnalyzer
+except ImportError:
+    # Define a simple stub if import fails
+    class RequirementsAnalyzer:
+        def analyze_requirements(self, *args, **kwargs):
+            return "Requirements analysis not available"
+
+# Import the NLP module for requirements analysis
+try:
+    from nlp import RequirementsGenerator
+except ImportError:
+    # Define a simple stub if import fails
+    class RequirementsGenerator:
+        def __init__(self, api_key=None, cache_dir=".cache"):
+            pass
+        
+        def generate_requirements_statement(self, text, format_type="standard"):
+            return "NLP analysis not available. Please ensure nlp.py is in the project directory."
+
 logger = logging.getLogger(__name__)
 load_dotenv()
 
 app = FastAPI()
 
-# JIRA Configuration
-JIRA_URL = os.getenv("JIRA_URL")
-JIRA_USER = os.getenv("JIRA_USER")
-JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN")
-PROJECT_KEY = os.getenv("JIRA_PROJECT_KEY")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# Initialize RequirementsGenerator with API key
+nlp_analyzer = RequirementsGenerator(api_key=os.getenv("GEMINI_API_KEY"))
 
-genai.configure(api_key=GEMINI_API_KEY)
+# Mount static files directory
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# Define BaseModel classes
 class JiraIssue(BaseModel):
     summary: str
     description: str
@@ -61,6 +86,730 @@ class DocumentRequest(BaseModel):
     format: str = Field(default="word", pattern="^(word|excel|both)$")
     include_metadata: bool = Field(default=True)
     template_type: str = Field(default="detailed", pattern="^(detailed|simple)$")
+
+# Request models for OCR functionality
+class ContentRequest(BaseModel):
+    content: str
+    type: str = "text"
+
+class UrlRequest(BaseModel):
+    url: str
+
+# New model for NLP analysis
+class NLPRequest(BaseModel):
+    text: str
+    format_type: str = "standard"
+
+# WebSocket manager
+class AnalyzerManager:
+    def __init__(self):
+        self.message_queues = {}
+        self.active_websockets = {}
+        self.input_events = {}
+        self.input_responses = {}
+        self.lock = threading.Lock()
+
+    async def send_message(self, websocket_id: str, message: dict):
+        if websocket_id in self.active_websockets:
+            try:
+                await self.active_websockets[websocket_id].send_json(message)
+            except Exception as e:
+                logger.error(f"Error sending message: {e}")
+
+    def register_websocket(self, websocket_id: str, websocket: WebSocket):
+        with self.lock:
+            self.message_queues[websocket_id] = []
+            self.active_websockets[websocket_id] = websocket
+            self.input_events[websocket_id] = threading.Event()
+            self.input_responses[websocket_id] = None
+
+    def unregister_websocket(self, websocket_id: str):
+        with self.lock:
+            self.message_queues.pop(websocket_id, None)
+            self.active_websockets.pop(websocket_id, None)
+            if websocket_id in self.input_events:
+                self.input_events[websocket_id].set()
+            self.input_events.pop(websocket_id, None)
+            self.input_responses.pop(websocket_id, None)
+
+    def get_queue(self, websocket_id: str) -> list:
+        return self.message_queues.get(websocket_id, [])
+
+    def wait_for_input(self, websocket_id: str, timeout=None) -> str:
+        if self.input_events[websocket_id].wait(timeout):
+            response = self.input_responses[websocket_id]
+            self.input_responses[websocket_id] = None
+            self.input_events[websocket_id].clear()
+            return response
+        return None
+
+    def set_input_response(self, websocket_id: str, response: str):
+        with self.lock:
+            self.input_responses[websocket_id] = response
+            self.input_events[websocket_id].set()
+
+analyzer_manager = AnalyzerManager()
+
+# WebSocket helper functions
+async def process_analyzer_queue(websocket_id: str):
+    queue = analyzer_manager.get_queue(websocket_id)
+    while True:
+        try:
+            if queue and len(queue) > 0:
+                message = queue.pop(0)
+                await analyzer_manager.send_message(websocket_id, message)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Error processing queue: {e}")
+        await asyncio.sleep(0.1)
+
+def run_analyzer_in_thread(analyzer, description, websocket_id):
+    try:
+        # The actual method only takes the description parameter
+        # Let's implement a similar approach to what's in app.py
+        message_queue = analyzer_manager.get_queue(websocket_id)
+        
+        def custom_print(*args, **kwargs):
+            message = " ".join(str(arg) for arg in args)
+            message_queue.append({
+                "type": "output",
+                "message": message
+            })
+
+        def custom_input(*args, **kwargs):
+            prompt = args[0] if args else "Your answer:"
+            message_queue.append({
+                "type": "question",
+                "message": prompt
+            })
+            
+            response = analyzer_manager.wait_for_input(websocket_id)
+            return response
+
+        # Replace standard input/output
+        import builtins
+        original_input = builtins.input
+        original_print = builtins.print
+        builtins.input = custom_input
+        builtins.print = custom_print
+
+        # Run analysis with only the description parameter
+        results = analyzer.analyze_requirements(description)
+        
+        # Save results to file
+        try:
+            # First clear the existing file
+            with open("requirements_answers.txt", 'w', encoding='utf-8') as f:
+                f.write("")  # Clear file
+                
+            # Then save new results if the method exists
+            if hasattr(analyzer, 'save_requirements'):
+                analyzer.save_requirements("requirements_answers.txt", results)
+            else:
+                # Fallback if the method doesn't exist
+                with open("requirements_answers.txt", 'w', encoding='utf-8') as f:
+                    f.write(str(results))
+            
+            message_queue.append({
+                "type": "output",
+                "message": "\nRequirements have been saved to 'requirements_answers.txt'"
+            })
+            message_queue.append({
+                "type": "file_ready",
+                "message": "requirements_answers.txt"
+            })
+        except Exception as e:
+            logger.error(f"Error saving file: {str(e)}")
+            message_queue.append({
+                "type": "error",
+                "message": f"Error saving file: {str(e)}"
+            })
+            
+    except Exception as e:
+        error_msg = f"Error during analysis: {str(e)}"
+        logger.error(error_msg)
+        message_queue = analyzer_manager.get_queue(websocket_id)
+        if message_queue is not None:
+            message_queue.append({"type": "error", "message": error_msg})
+    finally:
+        # Restore original input/output if we modified them
+        if 'original_input' in locals() and 'original_print' in locals():
+            builtins.input = original_input
+            builtins.print = original_print
+
+def run_srs_generator_in_thread(websocket_id):
+    try:
+        message_queue = analyzer_manager.get_queue(websocket_id)
+        
+        # Check if requirements file exists and is not empty
+        if not os.path.exists("requirements_answers.txt") or os.path.getsize("requirements_answers.txt") == 0:
+            message_queue.append({
+                "type": "error",
+                "message": "No requirements analysis results found. Please analyze requirements first."
+            })
+            return
+            
+        # Run srs_generator_v2.py if it exists
+        if os.path.exists("srs_generator_v2.py"):
+            message_queue.append({
+                "type": "output",
+                "message": "Generating SRS document..."
+            })
+            
+            try:
+                # Run srs_generator_v2.py
+                process = subprocess.Popen(
+                    ["python", "srs_generator_v2.py"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1,
+                    universal_newlines=True
+                )
+
+                # Stream output in real-time
+                while True:
+                    output = process.stdout.readline()
+                    if output:
+                        message_queue.append({
+                            "type": "output",
+                            "message": output.strip()
+                        })
+                    
+                    error = process.stderr.readline()
+                    if error:
+                        message_queue.append({
+                            "type": "output",
+                            "message": "Error: " + error.strip()
+                        })
+                    
+                    if output == '' and error == '' and process.poll() is not None:
+                        break
+
+                if process.returncode == 0:
+                    # Check if SRS file was generated
+                    if os.path.exists("system_srs.md"):
+                        message_queue.append({
+                            "type": "output",
+                            "message": "\nSRS document has been generated successfully!"
+                        })
+                        message_queue.append({
+                            "type": "file_ready",
+                            "message": "system_srs.md"
+                        })
+                    else:
+                        message_queue.append({
+                            "type": "error",
+                            "message": "SRS file was not generated"
+                        })
+                else:
+                    message_queue.append({
+                        "type": "error",
+                        "message": "SRS generation failed"
+                    })
+            except Exception as e:
+                message_queue.append({
+                    "type": "error",
+                    "message": f"Error running SRS generator: {str(e)}"
+                })
+        else:
+            # Fallback if srs_generator_v2.py doesn't exist
+            message_queue.append({
+                "type": "error",
+                "message": "SRS generator script not found. Please ensure srs_generator_v2.py exists."
+            })
+    except Exception as e:
+        error_msg = f"Error during SRS generation: {str(e)}"
+        logger.error(error_msg)
+        message_queue = analyzer_manager.get_queue(websocket_id)
+        if message_queue is not None:
+            message_queue.append({"type": "error", "message": error_msg})
+
+@app.get("/")
+async def read_root():
+    return FileResponse("static/index.html")
+
+@app.get("/download")
+async def download_requirements():
+    try:
+        if not os.path.exists("requirements_answers.txt"):
+            raise HTTPException(status_code=404, detail="File not found")
+        return FileResponse(
+            path="requirements_answers.txt",
+            filename="requirements_answers.txt",
+            media_type="text/plain"
+        )
+    except Exception as e:
+        logger.error(f"Download error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/convert_srs")
+async def convert_srs(format: str):
+    """Convert SRS to different formats"""
+    try:
+        if format == "word":
+            subprocess.run(["pandoc", "system_srs.md", "-o", "system_srs.docx"], check=True)
+            return JSONResponse({"success": True})
+        elif format == "pdf":
+            subprocess.run(["pandoc", "system_srs.md", "-o", "system_srs.pdf"], check=True)
+            return JSONResponse({"success": True})
+        else:
+            raise HTTPException(status_code=400, detail="Invalid format")
+    except Exception as e:
+        logger.error(f"Error converting SRS: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/download_srs")
+async def download_srs(format: str = None):
+    """Download SRS in various formats"""
+    try:
+        if not format or format == "md":
+            if not os.path.exists("system_srs.md"):
+                raise HTTPException(status_code=404, detail="SRS file not found")
+            return FileResponse(
+                path="system_srs.md",
+                filename="system_srs.md",
+                media_type="text/markdown"
+            )
+        elif format == "word":
+            if not os.path.exists("system_srs.docx"):
+                raise HTTPException(status_code=404, detail="Word file not found")
+            return FileResponse("system_srs.docx", filename="system_srs.docx")
+        elif format == "pdf":
+            if not os.path.exists("system_srs.pdf"):
+                raise HTTPException(status_code=404, detail="PDF file not found")
+            return FileResponse("system_srs.pdf", filename="system_srs.pdf")
+    except Exception as e:
+        logger.error(f"Download SRS error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/create_jira_stories")
+async def create_jira_stories():
+    """Create Jira stories from SRS"""
+    try:
+        # Check if system_srs.md exists
+        if not os.path.exists("system_srs.md"):
+            raise HTTPException(status_code=400, detail="No SRS file found. Please generate SRS first.")
+        
+        # Read the SRS file
+        with open("system_srs.md", "r") as f:
+            srs_content = f.read()
+        
+        # Save as txt for Jira processing
+        txt_path = "system_srs.txt"
+        with open(txt_path, "w", encoding="utf-8") as f:
+            f.write(srs_content)
+        
+        # Create a StringIO to capture output
+        from io import StringIO
+        import sys
+        output_capture = StringIO()
+        original_stdout = sys.stdout
+        sys.stdout = output_capture
+        
+        try:
+            # Process the file
+            process_srs_file(txt_path)
+            
+            # Get the captured output
+            output = output_capture.getvalue()
+            print(f"Processing output: {output}")  # Debug line
+        finally:
+            sys.stdout = original_stdout
+            # Clean up the temporary txt file
+            if os.path.exists(txt_path):
+                os.remove(txt_path)
+        
+        return JSONResponse({
+            "success": True,
+            "output": output
+        })
+    except Exception as e:
+        logger.error(f"Error in Jira integration: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        })
+
+@app.get("/download_excel")
+async def download_excel():
+    """Download the generated Excel file from Jira requirements"""
+    try:
+        if not os.path.exists("requirements.xlsx"):
+            raise HTTPException(status_code=404, detail="Excel file not found")
+        return FileResponse("requirements.xlsx", filename="requirements.xlsx")
+    except Exception as e:
+        logger.error(f"Download Excel error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# OCR and Text Extraction Endpoints
+@app.post("/extract_text")
+async def extract_text(file: UploadFile = File(...)):
+    """Extract text from uploaded files using OCR if needed"""
+    try:
+        content = await file.read()
+        filename = file.filename.lower()
+        text = ""
+        
+        # Create temp directory if it doesn't exist
+        os.makedirs("temp", exist_ok=True)
+        
+        # Process different file types
+        if filename.endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff')):
+            # Save the image temporarily
+            temp_path = f"temp/{str(uuid.uuid4())}{os.path.splitext(filename)[1]}"
+            with open(temp_path, "wb") as f:
+                f.write(content)
+            
+            try:
+                # Use external OCR libraries if available
+                try:
+                    import pytesseract
+                    from PIL import Image
+                    
+                    # Perform OCR
+                    image = Image.open(temp_path)
+                    text = pytesseract.image_to_string(image)
+                except ImportError:
+                    # Fallback to a simpler approach if pytesseract is not available
+                    # In a production environment, you'd want to ensure pytesseract is installed
+                    text = f"OCR processing requires pytesseract library. Please install it with: pip install pytesseract\n\nAlternatively, you can use PDF files or text-based documents."
+            finally:
+                # Clean up the temp file
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+        
+        elif filename.endswith('.pdf'):
+            # Save the PDF temporarily
+            temp_path = f"temp/{str(uuid.uuid4())}.pdf"
+            with open(temp_path, "wb") as f:
+                f.write(content)
+            
+            try:
+                # Extract text from PDF
+                try:
+                    import PyPDF2
+                    
+                    reader = PyPDF2.PdfReader(temp_path)
+                    text = ""
+                    for page_num in range(len(reader.pages)):
+                        text += reader.pages[page_num].extract_text() + "\n\n"
+                except ImportError:
+                    text = f"PDF processing requires PyPDF2 library. Please install it with: pip install PyPDF2"
+            finally:
+                # Clean up the temp file
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+        
+        elif filename.endswith(('.doc', '.docx')):
+            # Save the document temporarily
+            temp_path = f"temp/{str(uuid.uuid4())}{os.path.splitext(filename)[1]}"
+            with open(temp_path, "wb") as f:
+                f.write(content)
+            
+            try:
+                # Extract text from Word document
+                doc = Document(temp_path)
+                text = "\n\n".join([para.text for para in doc.paragraphs])
+            finally:
+                # Clean up the temp file
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+        
+        elif filename.endswith('.txt'):
+            # Plain text file
+            text = content.decode('utf-8', errors='replace')
+        
+        elif filename.endswith(('.html', '.htm')):
+            # HTML file
+            html_content = content.decode('utf-8', errors='replace')
+            
+            try:
+                from bs4 import BeautifulSoup
+                
+                soup = BeautifulSoup(html_content, 'html.parser')
+                # Remove script and style elements
+                for script in soup(["script", "style"]):
+                    script.extract()
+                
+                # Get text
+                text = soup.get_text(separator='\n')
+                
+                # Clean up whitespace
+                lines = (line.strip() for line in text.splitlines())
+                chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+                text = '\n'.join(chunk for chunk in chunks if chunk)
+            except ImportError:
+                # Simple HTML parsing without BeautifulSoup
+                import re
+                html_content = re.sub(r'<[^>]+>', ' ', html_content)
+                text = re.sub(r'\s+', ' ', html_content).strip()
+        
+        else:
+            # Unknown file type, try to decode as text
+            try:
+                text = content.decode('utf-8', errors='replace')
+            except:
+                raise HTTPException(status_code=400, detail=f"Unsupported file type: {filename}")
+        
+        # Clean up the text
+        text = clean_extracted_text(text)
+        
+        # Process text through NLP if available
+        analyzed_text = ""
+        try:
+            if text:
+                analyzed_text = nlp_analyzer.generate_requirements_statement(text)
+        except Exception as nlp_error:
+            logger.error(f"NLP processing error: {str(nlp_error)}")
+            analyzed_text = f"Error processing text with NLP: {str(nlp_error)}"
+        
+        return JSONResponse({
+            "success": True,
+            "text": text,
+            "analyzed_text": analyzed_text,
+            "filename": filename
+        })
+    
+    except Exception as e:
+        logger.error(f"Extract text error: {str(e)}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        })
+
+@app.post("/process_content")
+async def process_content(request: ContentRequest):
+    """Process content extracted from clipboard or drag-and-drop"""
+    try:
+        content = request.content
+        content_type = request.type
+        
+        if content_type == "html":
+            try:
+                from bs4 import BeautifulSoup
+                
+                soup = BeautifulSoup(content, 'html.parser')
+                # Remove script and style elements
+                for script in soup(["script", "style"]):
+                    script.extract()
+                
+                # Get text
+                text = soup.get_text(separator='\n')
+                
+                # Clean up whitespace
+                lines = (line.strip() for line in text.splitlines())
+                chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+                text = '\n'.join(chunk for chunk in chunks if chunk)
+            except ImportError:
+                # Simple HTML parsing without BeautifulSoup
+                import re
+                content = re.sub(r'<[^>]+>', ' ', content)
+                text = re.sub(r'\s+', ' ', content).strip()
+        else:
+            # Plain text
+            text = content
+        
+        # Clean up the text
+        text = clean_extracted_text(text)
+        
+        # Process text through NLP if available
+        analyzed_text = ""
+        try:
+            if text:
+                analyzed_text = nlp_analyzer.generate_requirements_statement(text)
+        except Exception as nlp_error:
+            logger.error(f"NLP processing error: {str(nlp_error)}")
+            analyzed_text = f"Error processing text with NLP: {str(nlp_error)}"
+        
+        return JSONResponse({
+            "success": True,
+            "text": text,
+            "analyzed_text": analyzed_text
+        })
+    
+    except Exception as e:
+        logger.error(f"Process content error: {str(e)}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        })
+
+@app.post("/extract_from_url")
+async def extract_from_url(request: UrlRequest):
+    """Extract content from a URL"""
+    try:
+        url = request.url
+        if not url:
+            raise HTTPException(status_code=400, detail="URL is required")
+        
+        # Check if URL is valid
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    raise HTTPException(status_code=response.status, detail="Failed to fetch URL")
+                
+                content_type = response.headers.get('Content-Type', '')
+                
+                if 'text/html' in content_type:
+                    # HTML content
+                    html = await response.text()
+                    
+                    try:
+                        from bs4 import BeautifulSoup
+                        
+                        soup = BeautifulSoup(html, 'html.parser')
+                        # Remove script and style elements
+                        for script in soup(["script", "style"]):
+                            script.extract()
+                        
+                        # Get main content if possible
+                        main_content = soup.find('main') or soup.find('article') or soup.find('div', id='content') or soup.find('div', class_='content') or soup.body
+                        
+                        if main_content:
+                            # Get text from main content
+                            text = main_content.get_text(separator='\n')
+                        else:
+                            # Get text from entire document
+                            text = soup.get_text(separator='\n')
+                        
+                        # Clean up whitespace
+                        lines = (line.strip() for line in text.splitlines())
+                        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+                        text = '\n'.join(chunk for chunk in chunks if chunk)
+                    except ImportError:
+                        # Simple HTML parsing without BeautifulSoup
+                        import re
+                        html = re.sub(r'<[^>]+>', ' ', html)
+                        text = re.sub(r'\s+', ' ', html).strip()
+                
+                elif 'application/pdf' in content_type:
+                    # PDF content
+                    pdf_content = await response.read()
+                    
+                    # Save the PDF temporarily
+                    temp_path = f"temp/{str(uuid.uuid4())}.pdf"
+                    os.makedirs("temp", exist_ok=True)
+                    
+                    with open(temp_path, "wb") as f:
+                        f.write(pdf_content)
+                    
+                    try:
+                        # Extract text from PDF
+                        try:
+                            import PyPDF2
+                            
+                            reader = PyPDF2.PdfReader(temp_path)
+                            text = ""
+                            for page_num in range(len(reader.pages)):
+                                text += reader.pages[page_num].extract_text() + "\n\n"
+                        except ImportError:
+                            text = f"PDF processing requires PyPDF2 library. Please install it with: pip install PyPDF2"
+                    finally:
+                        # Clean up the temp file
+                        if os.path.exists(temp_path):
+                            os.remove(temp_path)
+                
+                else:
+                    # Try to read as plain text
+                    text = await response.text()
+        
+        # Clean up the text
+        text = clean_extracted_text(text)
+        
+        # Process text through NLP if available
+        analyzed_text = ""
+        try:
+            if text:
+                analyzed_text = nlp_analyzer.generate_requirements_statement(text)
+        except Exception as nlp_error:
+            logger.error(f"NLP processing error: {str(nlp_error)}")
+            analyzed_text = f"Error processing text with NLP: {str(nlp_error)}"
+        
+        return JSONResponse({
+            "success": True,
+            "text": text,
+            "analyzed_text": analyzed_text,
+            "url": url
+        })
+    
+    except Exception as e:
+        logger.error(f"URL extraction error: {str(e)}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        })
+
+def clean_extracted_text(text: str) -> str:
+    """Clean up extracted text for better quality"""
+    if not text:
+        return ""
+    
+    # Replace multiple newlines with a single newline
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    
+    # Remove leading/trailing whitespace from each line
+    lines = [line.strip() for line in text.splitlines()]
+    
+    # Join the lines back together
+    text = '\n'.join(line for line in lines if line)
+    
+    return text
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    websocket_id = str(id(websocket))
+    
+    analyzer = RequirementsAnalyzer()
+    analyzer_manager.register_websocket(websocket_id, websocket)
+    
+    queue_processor = asyncio.create_task(process_analyzer_queue(websocket_id))
+    
+    try:
+        while True:
+            data = await websocket.receive_json()
+            
+            if data["type"] == "analyze":
+                thread = threading.Thread(
+                    target=run_analyzer_in_thread,
+                    args=(analyzer, data["description"], websocket_id)
+                )
+                thread.start()
+            elif data["type"] == "generate_srs":
+                thread = threading.Thread(
+                    target=run_srs_generator_in_thread,
+                    args=(websocket_id,)
+                )
+                thread.start()
+            elif data["type"] == "input_response":
+                analyzer_manager.set_input_response(websocket_id, data["value"])
+
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected: {websocket_id}")
+    except Exception as e:
+        logger.error(f"WebSocket error: {str(e)}")
+    finally:
+        analyzer_manager.unregister_websocket(websocket_id)
+        queue_processor.cancel()
+        try:
+            await websocket.close()
+        except:
+            pass
+
+# JIRA Configuration
+JIRA_URL = os.getenv("JIRA_URL")
+JIRA_USER = os.getenv("JIRA_USER")
+JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN")
+PROJECT_KEY = os.getenv("JIRA_PROJECT_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+genai.configure(api_key=GEMINI_API_KEY)
 
 def convert_to_adf(text: str) -> dict:
     """Convert plain text with line breaks to ADF"""
@@ -1116,6 +1865,33 @@ def process_srs_file(file_path: str):
         print(f"Error processing SRS file: {str(e)}")
         raise
 
+@app.post("/analyze_requirements")
+async def analyze_requirements(request: NLPRequest):
+    """Analyze text using NLP to extract requirements"""
+    try:
+        if not request.text:
+            raise HTTPException(status_code=400, detail="Text is required")
+        
+        # Process the text with NLP
+        analyzed_text = nlp_analyzer.generate_requirements_statement(
+            request.text, 
+            format_type=request.format_type
+        )
+        
+        return JSONResponse({
+            "success": True,
+            "original_text": request.text,
+            "analyzed_text": analyzed_text
+        })
+    
+    except Exception as e:
+        logger.error(f"NLP analysis error: {str(e)}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        })
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
