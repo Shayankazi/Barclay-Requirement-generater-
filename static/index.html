@@ -616,7 +616,7 @@
                         output.scrollIntoView({ behavior: 'smooth' });
                     }
                     outputContent.textContent += data.message + '\n';
-                    output.scrollTop = output.scrollHeight;
+                    output.scrollTop = output.scrollHeight; // Auto-scroll to bottom
                 }
                 else if (data.type === 'question') {
                     showInputForm(data.message);
@@ -629,10 +629,14 @@
                         showSRSSection();
                         // Show success notification
                         showNotification('Requirements analysis completed!', 'success');
+                        // Scroll to the download button
+                        downloadBtn.scrollIntoView({ behavior: 'smooth' });
                     } else if (data.message === 'system_srs.md') {
                         showDownloadSRSButton();
                         // Show success notification
                         showNotification('SRS document generated successfully!', 'success');
+                        // Scroll to SRS download section
+                        downloadSRSBtn.scrollIntoView({ behavior: 'smooth' });
                     }
                 }
                 else if (data.type === 'error') {
@@ -640,7 +644,7 @@
                         output.style.display = 'block';
                     }
                     outputContent.innerHTML += '<span style="color: var(--danger-color);">Error: ' + data.message + '</span>\n';
-                    output.scrollTop = output.scrollHeight;
+                    output.scrollTop = output.scrollHeight; // Auto-scroll to bottom
                     analyzeBtn.disabled = false;
                     analyzeBtn.innerHTML = '<i class="fas fa-cogs"></i> Analyze Requirements';
                     // Show error notification
@@ -650,11 +654,13 @@
 
             ws.onclose = function() {
                 output.textContent += '\nConnection closed. Reconnecting...\n';
+                output.scrollTop = output.scrollHeight; // Auto-scroll to bottom
                 setTimeout(connect, 1000);
             };
 
             ws.onerror = function(err) {
                 output.textContent += '\nWebSocket error: ' + err.message + '\n';
+                output.scrollTop = output.scrollHeight; // Auto-scroll to bottom
                 analyzeBtn.disabled = false;
             };
         }
@@ -697,6 +703,8 @@
             userInput.value = '';
             inputForm.style.display = 'block';
             userInput.focus();
+            // Ensure the input form is visible
+            inputForm.scrollIntoView({ behavior: 'smooth' });
         }
 
         function submitInput() {
@@ -707,6 +715,8 @@
                     value: response
                 }));
                 inputForm.style.display = 'none';
+                // After submitting, scroll back to output area
+                output.scrollIntoView({ behavior: 'smooth' });
             }
         }
 
